@@ -1,92 +1,135 @@
-# 🐟 AquaTeach — Interactive Learning Toolkit
+# 🐟 AquaTeach v1.1
 
-Toolkit pedagogi aktif untuk perkuliahan. 9 tools interaktif siap pakai.
+Interactive Learning Toolkit — FKP Universitas Udayana  
+MSP — Manajemen Sumberdaya Perairan
 
-## Tools yang Tersedia
+---
 
-| Tool | Fungsi | Durasi |
-|------|--------|--------|
-| 📊 Live Polling | Kumpulkan suara kelas real-time | 2–5 menit |
-| ☁️ Word Cloud | Galeri persepsi kolektif | 3–8 menit |
-| ⚡ Quick Quiz | Kuis countdown + reveal jawaban | 5–20 menit |
-| 🤝 Think–Pair–Share | 3 fase berstruktur dengan timer | 10–20 menit |
-| 📝 One-Minute Paper | Refleksi akhir sesi | 1–5 menit |
-| 📍 Opinion Line | Setuju/Netral/Tidak Setuju | 3–10 menit |
-| 💼 Case Trigger | Mini kasus diskusi mendalam | 10–25 menit |
-| 🎯 Misconception Check | Jebakan Benar/Salah + bedah | 3–10 menit |
-| 🔮 Prediction Question | Prediksi → bandingkan dengan ilmu | 5–15 menit |
+## 🔴 Fitur Baru: Go Live (Room Code + Firebase)
 
-## Deploy ke Vercel
+Dosen klik **Go Live** → mahasiswa scan QR dari HP → semua input masuk real-time.
 
-### Cara 1: Via GitHub (Direkomendasikan)
+### Cara Kerja
 
-1. Push folder ini ke GitHub repository baru
-2. Buka [vercel.com](https://vercel.com) → **New Project**
-3. Import repository dari GitHub
-4. Vercel akan auto-detect Vite — klik **Deploy**
-5. Selesai! URL siap dalam ~1 menit
-
-### Cara 2: Via Vercel CLI
-
-```bash
-npm install -g vercel
-cd aquateach
-vercel
+```
+Dosen: buka tool → klik "Go Live" → dapat kode room + QR
+Mahasiswa: scan QR / buka link → input dari HP
+Firebase: sinkron real-time antara semua perangkat
 ```
 
-Ikuti prompt, pilih **Y** untuk semua default.
+### Tools yang Mendukung Go Live
 
-### Cara 3: Drag & Drop (Termudah)
+| Tool | Mode Live | Input Mahasiswa |
+|------|-----------|-----------------|
+| 📊 Live Polling | ✅ | Pilih 1 opsi |
+| ☁️ Word Cloud | ✅ | Submit kata |
 
-```bash
-npm run build
+---
+
+## ⚙️ Setup Firebase (WAJIB untuk Go Live)
+
+### 1. Buat Project Firebase
+
+1. Buka [console.firebase.google.com](https://console.firebase.google.com)
+2. Klik **Add project** → beri nama (misal: `aquateach-fkp`)
+3. Di project, pilih **Build → Realtime Database**
+4. Klik **Create Database** → pilih region `asia-southeast1 (Singapore)`
+5. Mode: **Start in test mode** (untuk development)
+
+### 2. Ambil Konfigurasi
+
+1. Di Project Settings (⚙️) → **General** → scroll ke **Your apps**
+2. Klik ikon **Web** (`</>`) → daftarkan app
+3. Copy `firebaseConfig` yang muncul
+
+### 3. Pasang Config di Aplikasi
+
+**Cara A — Edit langsung** (development lokal):
+
+Buka `src/firebase.js`, ganti nilai `firebaseConfig`:
+
+```javascript
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "aquateach-fkp.firebaseapp.com",
+  databaseURL: "https://aquateach-fkp-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "aquateach-fkp",
+  storageBucket: "aquateach-fkp.appspot.com",
+  messagingSenderId: "123456789012",
+  appId: "1:123456789012:web:abcdef1234567890"
+}
 ```
 
-Lalu drag folder `dist/` ke [vercel.com/new](https://vercel.com/new).
+**Cara B — Environment Variables** (Vercel deployment, direkomendasikan):
 
-## Development Lokal
+Di Vercel Dashboard → Project Settings → **Environment Variables**, tambahkan:
+
+| Key | Value |
+|-----|-------|
+| `VITE_FIREBASE_API_KEY` | `AIzaSy...` |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `aquateach-fkp.firebaseapp.com` |
+| `VITE_FIREBASE_DATABASE_URL` | `https://aquateach-fkp-default-rtdb.asia-southeast1.firebasedatabase.app` |
+| `VITE_FIREBASE_PROJECT_ID` | `aquateach-fkp` |
+| `VITE_FIREBASE_STORAGE_BUCKET` | `aquateach-fkp.appspot.com` |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | `123456789012` |
+| `VITE_FIREBASE_APP_ID` | `1:123456789012:web:abc...` |
+
+### 4. Rules Firebase (Produksi)
+
+Di Firebase Console → Realtime Database → **Rules**, pasang:
+
+```json
+{
+  "rules": {
+    "rooms": {
+      "$roomId": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}
+```
+
+---
+
+## 🚀 Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-Buka http://localhost:5173
+## 📦 Build & Deploy
 
-## Struktur Project
-
-```
-aquateach/
-├── src/
-│   ├── pages/
-│   │   └── Home.jsx          # Dashboard utama
-│   ├── tools/
-│   │   ├── Polling.jsx
-│   │   ├── WordCloud.jsx
-│   │   ├── QuickQuiz.jsx
-│   │   ├── ThinkPairShare.jsx
-│   │   ├── OneMinutePaper.jsx
-│   │   ├── OpinionLine.jsx
-│   │   ├── CaseTrigger.jsx
-│   │   ├── MisconceptionCheck.jsx
-│   │   └── PredictionQuestion.jsx
-│   ├── App.jsx               # Layout + routing
-│   ├── index.css             # Global styles
-│   └── main.jsx
-├── index.html
-├── vite.config.js
-├── vercel.json               # SPA routing config
-└── package.json
+```bash
+npm run build
+# Deploy ke Vercel: vercel --prod
 ```
 
-## Kustomisasi
+---
 
-- **Tema warna**: Edit variabel CSS di `src/index.css` bagian `:root`
-- **Tambah preset kasus**: Edit array `PRESET_CASES` di `CaseTrigger.jsx`
-- **Logo/nama**: Edit `sb-logo` di `App.jsx`
+## 📁 Struktur Proyek
 
-## Catatan
+```
+src/
+├── firebase.js          # Konfigurasi Firebase
+├── hooks/
+│   └── useRoom.js       # Room management (create, listen, submit)
+├── pages/
+│   ├── Home.jsx         # Dashboard dosen
+│   └── StudentJoin.jsx  # Halaman mahasiswa (/?join&room=XXXX)
+└── tools/
+    ├── Polling.jsx      # Live Polling (+ Go Live)
+    ├── WordCloud.jsx    # Word Cloud (+ Go Live)
+    └── ...              # Tools lainnya
+```
 
-- Data **tidak tersimpan** antar sesi (no backend) — by design untuk privasi
-- Semua interaksi berjalan di browser dosen
-- Tested: Chrome, Firefox, Safari, Edge
+---
+
+## 🔗 URL Scheme
+
+- **Dosen**: `https://aquateach.vercel.app/`  
+- **Mahasiswa**: `https://aquateach.vercel.app/?join&room=ABCDEF`  
+  (atau scan QR yang muncul saat Go Live)
+
