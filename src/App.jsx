@@ -75,8 +75,8 @@ function App() {
 
         <div className="sb-footer">
           <div style={{ fontWeight: 700, color: 'var(--white)', marginBottom: 4 }}>AquaTeach v1.0</div>
-          <div>FKP Universitas Udayana</div>
-          <div>MSP — Tools Pedagogi Aktif</div>
+          <div>MSP FKP Univ. Udayana</div>
+          <div>☕ Developed by: Andy Rasyadi</div>
         </div>
       </aside>
 
