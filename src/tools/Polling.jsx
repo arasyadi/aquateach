@@ -331,7 +331,7 @@ function Polling() {
               {/* ↓ DIUBAH: tombol "Lihat Hasil" muncul di dua kondisi */}
               {!liveCode && <button className="btn btn-gold" onClick={() => setPhase('results')}>📊 Tampilkan Hasil</button>}
               {liveCode && liveClosed && <button className="btn btn-gold" onClick={() => setPhase('results')}>📊 Lihat Hasil</button>}
-              {liveCode && !liveClosed && <button className="btn btn-gold" onClick={async () => { await endLive(); setPhase('results') }}>🔒 Tutup & Lihat Hasil</button>}
+              {liveCode && !liveClosed && <button className="btn btn-gold" onClick={async () => { await endLive(); setPhase('results'); setPresentMode(true) }}>⛶ Mode Presentasi</button>}
               <button className="btn btn-outline" onClick={reset}>Reset</button>
             </div>
           </div>
