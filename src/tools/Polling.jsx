@@ -4,7 +4,6 @@ import {
   createRoom, closeRoom,
   useListenRoom, countVotes,
 } from '../hooks/useRoom'
-// 1. TAMBAHKAN IMPORT INI DI SINI
 import { QRCodeSVG } from 'qrcode.react'
 
 const COLORS = ['var(--teal)', 'var(--gold)', '#a78bfa', '#fb923c', '#34d399', '#f472b6']
@@ -20,6 +19,7 @@ function Polling() {
   const [liveCode, setLiveCode]       = useState(null)
   const [liveLoading, setLiveLoading] = useState(false)
   const [copied, setCopied]           = useState(false)
+  const [liveClosed, setLiveClosed]   = useState(false)   // ← BARU
 
   const { data: roomData } = useListenRoom(liveCode)
 
@@ -50,7 +50,7 @@ function Polling() {
 
   const reset = () => {
     setPhase('setup'); setQuestion(''); setOptions(['', '']); setVotes([])
-    setLiveCode(null)
+    setLiveCode(null); setLiveClosed(false)   // ← reset liveClosed juga
   }
 
   const goLive = async () => {
@@ -63,6 +63,7 @@ function Polling() {
       await createRoom(code, { tool: 'polling', question, options: optObject })
       setVotes(new Array(options.length).fill(0))
       setLiveCode(code)
+      setLiveClosed(false)
       setPhase('voting')
     } catch (e) {
       alert('Gagal membuat sesi live. Pastikan Firebase sudah dikonfigurasi.\n\n' + e.message)
@@ -70,9 +71,10 @@ function Polling() {
     setLiveLoading(false)
   }
 
+  // ↓ DIUBAH: endLive tidak langsung ganti phase, hanya tutup room
   const endLive = async () => {
     if (liveCode) await closeRoom(liveCode)
-    setPhase('results')
+    setLiveClosed(true)
   }
 
   const copyLink = () => {
@@ -81,46 +83,70 @@ function Polling() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // ─── LivePanel (mengikuti gaya OpinionLine) ───────────────────────────────
   const LivePanel = () => (
-    <div className="card anim-fade-up" style={{ border: '1.5px solid rgba(0,200,224,0.35)', boxShadow: '0 0 20px rgba(0,200,224,0.08)', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
-        <div style={{ textAlign: 'center' }}>
-          
-          {/* 2. BAGIAN INI TELAH DIREVISI MENGGUNAKAN QRCodeSVG */}
-          <div style={{ 
-            background: '#ffffff', 
-            padding: '8px', 
-            borderRadius: '10px', 
-            border: '3px solid rgba(0,200,224,0.3)', 
-            display: 'inline-block' 
-          }}>
-            <QRCodeSVG 
-              value={joinUrl(liveCode)} 
-              size={114} // Sedikit diperkecil agar total ukuran (termasuk padding) tetap ~130px
-              level="H" 
-            />
-          </div>
-          {/* =================================================== */}
+    <div className="card anim-fade-up" style={{
+      border: '1.5px solid rgba(0,200,224,0.35)',
+      boxShadow: '0 0 20px rgba(0,200,224,0.08)',
+      marginBottom: 16,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
 
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 5 }}>Scan to Join</div>
+        {/* QR besar — sama persis dengan OpinionLine */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            background: '#fff',
+            padding: '11px',
+            borderRadius: '14px',
+            border: '3px solid rgba(0,200,224,0.28)',
+            display: 'inline-block',
+            boxShadow: '0 0 28px rgba(0,200,224,0.22)',
+          }}>
+            <QRCodeSVG value={joinUrl(liveCode)} size={200} level="H" />
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>Scan untuk bergabung</div>
         </div>
+
+        {/* Info */}
         <div style={{ flex: 1, minWidth: 160 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
             <span className="phase-dot phase-dot-active" style={{ width: 10, height: 10 }} />
-            <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--teal)', fontSize: 13 }}>SESI LIVE AKTIF</span>
+            <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--teal)', fontSize: 13 }}>
+              SESI LIVE AKTIF
+            </span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>KODE ROOM</div>
-          <div style={{ fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 34, letterSpacing: 6, color: 'var(--white)', lineHeight: 1, marginBottom: 8 }}>{liveCode}</div>
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, wordBreak: 'break-all' }}>{joinUrl(liveCode)}</div>
+          <div style={{
+            fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 34,
+            letterSpacing: 6, color: 'var(--white)', lineHeight: 1, marginBottom: 8,
+          }}>{liveCode}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, wordBreak: 'break-all' }}>
+            {joinUrl(liveCode)}
+          </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn btn-outline btn-sm" onClick={copyLink}>{copied ? '✓ Tersalin!' : '📋 Salin Link'}</button>
-            {phase === 'voting' && <button className="btn btn-gold btn-sm" onClick={endLive}>🔒 Tutup Voting</button>}
+            <button className="btn btn-outline btn-sm" onClick={copyLink}>
+              {copied ? '✓ Tersalin!' : '📋 Salin Link'}
+            </button>
+            {/* ↓ DIUBAH: pakai liveClosed seperti OpinionLine */}
+            {!liveClosed
+              ? <button className="btn btn-gold btn-sm" onClick={endLive}>🔒 Tutup Voting</button>
+              : <span className="badge" style={{
+                  background: 'rgba(248,113,113,0.15)', color: '#f87171',
+                  border: '1px solid rgba(248,113,113,0.3)', padding: '6px 12px',
+                }}>🔒 Ditutup</span>
+            }
           </div>
         </div>
-        <div style={{ textAlign: 'center', minWidth: 60 }}>
-          <div style={{ fontFamily: 'var(--font-h)', fontSize: 38, fontWeight: 900, color: 'var(--teal)', lineHeight: 1 }}>{totalVotes}</div>
-          <div style={{ fontSize: 11, color: 'var(--muted)' }}>suara masuk</div>
+
+        {/* Total suara */}
+        <div style={{ textAlign: 'center', minWidth: 64 }}>
+          <div style={{
+            fontFamily: 'var(--font-h)', fontSize: 40, fontWeight: 900,
+            color: 'var(--teal)', lineHeight: 1,
+          }}>{totalVotes}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>suara masuk</div>
         </div>
+
       </div>
     </div>
   )
@@ -161,10 +187,54 @@ function Polling() {
 
   return (
     <>
+      {/* ─── Present Mode (mengikuti gaya OpinionLine) ─────────────────────── */}
       {presentMode && phase === 'results' && (
-        <div className="present-mode">
-          <button className="btn btn-outline btn-sm present-close" onClick={() => setPresentMode(false)}>✕ Tutup</button>
-          <ResultsView isPresent />
+        <div className="present-mode" style={{ alignItems: 'center', justifyContent: 'center' }}>
+          <button className="btn btn-outline btn-sm present-close" onClick={() => setPresentMode(false)}>
+            ✕ Tutup
+          </button>
+          <div style={{ maxWidth: 840, width: '100%', textAlign: 'center' }}>
+            <div style={{
+              fontFamily: 'var(--font-h)', fontSize: 28, fontWeight: 800,
+              color: 'var(--teal)', marginBottom: 16,
+            }}>📊 Live Polling</div>
+
+            {/* QR di present mode saat live — BARU, mengikuti OpinionLine */}
+            {liveCode && (
+              <div style={{
+                display: 'flex', justifyContent: 'center', alignItems: 'center',
+                gap: 28, marginBottom: 28, flexWrap: 'wrap',
+              }}>
+                <div style={{
+                  background: '#fff', padding: '11px', borderRadius: '14px',
+                  display: 'inline-block',
+                  boxShadow: '0 0 32px rgba(0,200,224,0.3)',
+                }}>
+                  <QRCodeSVG value={joinUrl(liveCode)} size={190} level="H" />
+                </div>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Kode Room</div>
+                  <div style={{
+                    fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 34,
+                    letterSpacing: 7, color: 'var(--teal)', marginBottom: 10,
+                  }}>{liveCode}</div>
+                  <span className="badge badge-teal" style={{ display: 'inline-flex' }}>
+                    <span className="phase-dot phase-dot-active" /> {totalVotes} suara masuk
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Pertanyaan */}
+            <div style={{
+              fontFamily: 'var(--font-h)', fontSize: 22, fontWeight: 700, lineHeight: 1.55,
+              marginBottom: 32, color: 'var(--white)',
+              background: 'var(--card)', borderRadius: 'var(--r)', padding: '24px',
+              border: '1px solid var(--border)',
+            }}>"{question}"</div>
+
+            <ResultsView isPresent />
+          </div>
         </div>
       )}
 
@@ -258,8 +328,10 @@ function Polling() {
               </div>
             ))}
             <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+              {/* ↓ DIUBAH: tombol "Lihat Hasil" muncul di dua kondisi */}
               {!liveCode && <button className="btn btn-gold" onClick={() => setPhase('results')}>📊 Tampilkan Hasil</button>}
-              {liveCode  && <button className="btn btn-gold" onClick={endLive}>🔒 Tutup & Lihat Hasil</button>}
+              {liveCode && liveClosed && <button className="btn btn-gold" onClick={() => setPhase('results')}>📊 Lihat Hasil</button>}
+              {liveCode && !liveClosed && <button className="btn btn-gold" onClick={async () => { await endLive(); setPhase('results') }}>🔒 Tutup & Lihat Hasil</button>}
               <button className="btn btn-outline" onClick={reset}>Reset</button>
             </div>
           </div>
