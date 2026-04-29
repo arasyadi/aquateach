@@ -4,6 +4,8 @@ import {
   createRoom, closeRoom,
   useListenRoom, countVotes,
 } from '../hooks/useRoom'
+// 1. TAMBAHKAN IMPORT INI DI SINI
+import { QRCodeSVG } from 'qrcode.react'
 
 const COLORS = ['var(--teal)', 'var(--gold)', '#a78bfa', '#fb923c', '#34d399', '#f472b6']
 
@@ -13,9 +15,6 @@ function Polling() {
   const [options, setOptions]         = useState(['', ''])
   const [votes, setVotes]             = useState([])
   const [presentMode, setPresentMode] = useState(false)
-
-  // State untuk presenter (memaksa layout bergeser sebelum ada yg vote)
-  const [forceShrink, setForceShrink] = useState(false)
 
   // Live mode state
   const [liveCode, setLiveCode]       = useState(null)
@@ -33,9 +32,6 @@ function Polling() {
 
   const displayVotes = liveVotes ?? votes
   const totalVotes   = displayVotes.reduce((a, b) => a + b, 0)
-  
-  // LOGIKA ANIMASI: Layout berubah jika ada suara masuk ATAU dosen klik tombol "Tampilkan Polling"
-  const isLayoutActive = totalVotes > 0 || forceShrink
 
   const addOption    = () => { if (options.length < 6) setOptions([...options, '']) }
   const removeOption = (i) => { if (options.length > 2) setOptions(options.filter((_, idx) => idx !== i)) }
@@ -45,7 +41,6 @@ function Polling() {
     if (!question.trim() || validOptions.length < 2) return
     setVotes(new Array(options.length).fill(0))
     setPhase('voting')
-    setForceShrink(true) // Langsung mode aktif jika manual
   }
 
   const vote = (i) => {
@@ -55,7 +50,7 @@ function Polling() {
 
   const reset = () => {
     setPhase('setup'); setQuestion(''); setOptions(['', '']); setVotes([])
-    setLiveCode(null); setForceShrink(false);
+    setLiveCode(null)
   }
 
   const goLive = async () => {
@@ -69,7 +64,6 @@ function Polling() {
       setVotes(new Array(options.length).fill(0))
       setLiveCode(code)
       setPhase('voting')
-      setForceShrink(false) // Memulai dengan mode QR Besar
     } catch (e) {
       alert('Gagal membuat sesi live. Pastikan Firebase sudah dikonfigurasi.\n\n' + e.message)
     }
@@ -86,6 +80,50 @@ function Polling() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  const LivePanel = () => (
+    <div className="card anim-fade-up" style={{ border: '1.5px solid rgba(0,200,224,0.35)', boxShadow: '0 0 20px rgba(0,200,224,0.08)', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
+        <div style={{ textAlign: 'center' }}>
+          
+          {/* 2. BAGIAN INI TELAH DIREVISI MENGGUNAKAN QRCodeSVG */}
+          <div style={{ 
+            background: '#ffffff', 
+            padding: '8px', 
+            borderRadius: '10px', 
+            border: '3px solid rgba(0,200,224,0.3)', 
+            display: 'inline-block' 
+          }}>
+            <QRCodeSVG 
+              value={joinUrl(liveCode)} 
+              size={114} // Sedikit diperkecil agar total ukuran (termasuk padding) tetap ~130px
+              level="H" 
+            />
+          </div>
+          {/* =================================================== */}
+
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 5 }}>Scan to Join</div>
+        </div>
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <span className="phase-dot phase-dot-active" style={{ width: 10, height: 10 }} />
+            <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--teal)', fontSize: 13 }}>SESI LIVE AKTIF</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>KODE ROOM</div>
+          <div style={{ fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 34, letterSpacing: 6, color: 'var(--white)', lineHeight: 1, marginBottom: 8 }}>{liveCode}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, wordBreak: 'break-all' }}>{joinUrl(liveCode)}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-outline btn-sm" onClick={copyLink}>{copied ? '✓ Tersalin!' : '📋 Salin Link'}</button>
+            {phase === 'voting' && <button className="btn btn-gold btn-sm" onClick={endLive}>🔒 Tutup Voting</button>}
+          </div>
+        </div>
+        <div style={{ textAlign: 'center', minWidth: 60 }}>
+          <div style={{ fontFamily: 'var(--font-h)', fontSize: 38, fontWeight: 900, color: 'var(--teal)', lineHeight: 1 }}>{totalVotes}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)' }}>suara masuk</div>
+        </div>
+      </div>
+    </div>
+  )
 
   const ResultsView = ({ isPresent }) => (
     <div style={isPresent ? { padding: '40px', maxWidth: 800, margin: '0 auto', width: '100%' } : {}}>
@@ -130,20 +168,16 @@ function Polling() {
         </div>
       )}
 
-      {/* Header hanya tampil jika QR belum full screen / phase setup */}
-      {(!liveCode || isLayoutActive || phase !== 'voting') && (
-        <div className="page-hdr">
-          <div className="page-hdr-top">
-            <div className="page-hdr-icon">📊</div>
-            <div>
-              <h2>Live Polling</h2>
-              <p>Kumpulkan suara kelas secara real-time untuk mengukur pendapat atau prior knowledge</p>
-            </div>
+      <div className="page-hdr">
+        <div className="page-hdr-top">
+          <div className="page-hdr-icon">📊</div>
+          <div>
+            <h2>Live Polling</h2>
+            <p>Kumpulkan suara kelas secara real-time untuk mengukur pendapat atau prior knowledge</p>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Navigasi Phase */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
         {['setup', 'voting', 'results'].map((p, i) => (
           <div key={p} className={`phase-chip ${phase === p ? 'phase-active' : 'phase-setup'}`}>
@@ -151,6 +185,11 @@ function Polling() {
             {i + 1}. {p === 'setup' ? 'Setup' : p === 'voting' ? 'Voting' : 'Hasil'}
           </div>
         ))}
+        {liveCode && (
+          <span className="badge badge-teal" style={{ display: 'inline-flex', gap: 6, marginLeft: 'auto' }}>
+            <span className="phase-dot phase-dot-active" /> LIVE · {liveCode}
+          </span>
+        )}
       </div>
 
       {phase === 'setup' && (
@@ -181,131 +220,52 @@ function Polling() {
               {liveLoading ? '⏳ Membuat...' : '🔴 Go Live'}
             </button>
           </div>
+          <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+            🔴 Go Live → mahasiswa vote dari HP via QR / link · 🖥️ Manual → klik langsung di perangkat dosen
+          </p>
         </div>
       )}
 
-      {/* --- FASE VOTING (LIVE ANIMATION AREA) --- */}
       {phase === 'voting' && (
-        <div className="anim-fade-up" style={{
-          display: 'flex',
-          flexDirection: isLayoutActive ? 'row' : 'column',
-          gap: '24px',
-          alignItems: isLayoutActive ? 'flex-start' : 'center',
-          justifyContent: 'center',
-          transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)', // Efek smooth
-          minHeight: !isLayoutActive ? '65vh' : 'auto'
-        }}>
-
-          {/* KIRI / TENGAH: Panel QR Code */}
-          {(liveCode || !isLayoutActive) && (
-            <div className="card" style={{
-              width: !isLayoutActive ? '500px' : '320px',
-              transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              textAlign: 'center',
-              border: '1.5px solid rgba(0,200,224,0.35)',
-              boxShadow: '0 0 20px rgba(0,200,224,0.08)',
-              flexShrink: 0
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                <span className="phase-dot phase-dot-active" style={{ width: 10, height: 10 }} />
-                <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--teal)', fontSize: 13 }}>
-                  SESI LIVE AKTIF
-                </span>
+        <div className="anim-fade-up">
+          {liveCode && <LivePanel />}
+          <div className="card mb-16">
+            <div style={{ marginBottom: 16 }}>
+              <div className="badge badge-teal mb-12" style={{ display: 'inline-flex' }}>
+                <span className="phase-dot phase-dot-active" />
+                {liveCode ? `LIVE — ${totalVotes} suara masuk (real-time)` : `LIVE — ${totalVotes} suara masuk`}
               </div>
-
-              <img 
-                src={qrUrl(liveCode)} 
-                alt="QR Code" 
-                style={{ 
-                  width: !isLayoutActive ? 250 : 130, 
-                  height: !isLayoutActive ? 250 : 130, 
-                  borderRadius: 12, 
-                  border: '3px solid rgba(0,200,224,0.3)', 
-                  transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
-                  marginBottom: 16 
-                }} 
-              />
-              
-              {!isLayoutActive && <div style={{ fontSize: 16, color: 'var(--white)', marginBottom: 24, fontWeight: 600 }}>Scan untuk Bergabung!</div>}
-
-              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>KODE ROOM</div>
-              <div style={{ fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: !isLayoutActive ? 42 : 34, letterSpacing: 6, color: 'var(--white)', lineHeight: 1, marginBottom: 8, transition: 'all 0.8s ease' }}>
-                {liveCode}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16, wordBreak: 'break-all' }}>{joinUrl(liveCode)}</div>
-              
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <button className="btn btn-outline btn-sm" onClick={copyLink}>{copied ? '✓ Tersalin!' : '📋 Salin Link'}</button>
-                {isLayoutActive && <button className="btn btn-gold btn-sm" onClick={endLive}>🔒 Tutup Voting</button>}
-              </div>
-
-              {/* Tombol manual untuk memaksa layout bergeser walau belum ada vote */}
-              {!isLayoutActive && (
-                <button className="btn btn-teal mt-16" onClick={() => setForceShrink(true)}>
-                  Buka Opsi Polling ➔
-                </button>
-              )}
-
-              {isLayoutActive && (
-                <div style={{ textAlign: 'center', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)', width: '100%' }}>
-                  <div style={{ fontFamily: 'var(--font-h)', fontSize: 38, fontWeight: 900, color: 'var(--teal)', lineHeight: 1 }}>{totalVotes}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>suara masuk</div>
-                </div>
-              )}
+              <div style={{ fontFamily: 'var(--font-h)', fontSize: 20, fontWeight: 700, lineHeight: 1.4 }}>{question}</div>
             </div>
-          )}
-
-          {/* KANAN: Area Opsi Polling (Muncul saat ada vote atau tombol ditekan) */}
-          <div style={{
-            flex: 1,
-            width: '100%',
-            opacity: !isLayoutActive ? 0 : 1,
-            transform: !isLayoutActive ? 'translateY(40px)' : 'translateY(0)',
-            maxHeight: !isLayoutActive ? '0px' : '2000px', // Hack CSS untuk menghilangkan elemen tanpa display:none
-            pointerEvents: !isLayoutActive ? 'none' : 'auto',
-            overflow: 'hidden',
-            transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
-          }}>
-            <div className="card mb-16">
-              <div style={{ marginBottom: 16 }}>
-                <div className="badge badge-teal mb-12" style={{ display: 'inline-flex' }}>
-                  <span className="phase-dot phase-dot-active" />
-                  {liveCode ? `LIVE — ${totalVotes} suara masuk (real-time)` : `Manual Mode — ${totalVotes} suara masuk`}
-                </div>
-                <div style={{ fontFamily: 'var(--font-h)', fontSize: 24, fontWeight: 700, lineHeight: 1.4 }}>{question}</div>
-              </div>
-            </div>
-
-            <div className="card">
-              {validOptions.map((opt, i) => (
-                <div key={i} className={`option-row ${!liveCode ? 'clickable' : ''}`}
-                  onClick={() => vote(i)}
-                  style={{ cursor: liveCode ? 'default' : 'pointer', borderColor: 'var(--border)' }}>
-                  <div className="option-row-content">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width:32, height:32, borderRadius:6, background:COLORS[i%COLORS.length]+'22', display:'flex', alignItems:'center', justifyContent:'center', color:COLORS[i%COLORS.length], fontWeight:800, fontFamily:'var(--font-h)' }}>
-                        {String.fromCharCode(65+i)}
-                      </div>
-                      <span className="option-row-text">{opt}</span>
+            <p className="text-muted fs-13">
+              {liveCode ? 'Mahasiswa voting dari HP via QR di atas. Suara masuk otomatis ↑' : 'Klik opsi untuk menambah suara (atau mahasiswa input langsung):'}
+            </p>
+          </div>
+          <div className="card">
+            {validOptions.map((opt, i) => (
+              <div key={i} className={`option-row ${!liveCode ? 'clickable' : ''}`}
+                onClick={() => vote(i)}
+                style={{ cursor: liveCode ? 'default' : 'pointer', borderColor: 'var(--border)' }}>
+                <div className="option-row-content">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width:32, height:32, borderRadius:6, background:COLORS[i%COLORS.length]+'22', display:'flex', alignItems:'center', justifyContent:'center', color:COLORS[i%COLORS.length], fontWeight:800, fontFamily:'var(--font-h)' }}>
+                      {String.fromCharCode(65+i)}
                     </div>
-                    <span style={{ fontFamily:'var(--font-h)', fontSize:22, fontWeight:800, color:COLORS[i%COLORS.length] }}>{displayVotes[i] ?? 0}</span>
+                    <span className="option-row-text">{opt}</span>
                   </div>
+                  <span style={{ fontFamily:'var(--font-h)', fontSize:22, fontWeight:800, color:COLORS[i%COLORS.length] }}>{displayVotes[i] ?? 0}</span>
                 </div>
-              ))}
-              <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
-                {!liveCode && <button className="btn btn-gold" onClick={() => setPhase('results')}>📊 Tampilkan Hasil</button>}
-                {liveCode  && <button className="btn btn-gold" onClick={endLive}>🔒 Tutup & Lihat Hasil</button>}
-                <button className="btn btn-outline" onClick={reset}>Reset</button>
               </div>
+            ))}
+            <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+              {!liveCode && <button className="btn btn-gold" onClick={() => setPhase('results')}>📊 Tampilkan Hasil</button>}
+              {liveCode  && <button className="btn btn-gold" onClick={endLive}>🔒 Tutup & Lihat Hasil</button>}
+              <button className="btn btn-outline" onClick={reset}>Reset</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Fase Result / Selesai (Tidak berubah) */}
       {phase === 'results' && (
         <div className="anim-fade-up">
           {liveCode && (
@@ -316,6 +276,7 @@ function Polling() {
             </div>
           )}
           <div className="card mb-16">
+            <div style={{ fontFamily:'var(--font-h)', fontSize:20, fontWeight:700, marginBottom:16 }}>{question}</div>
             <ResultsView />
           </div>
           <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>

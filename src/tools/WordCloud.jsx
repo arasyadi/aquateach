@@ -4,6 +4,8 @@ import {
   createRoom, closeRoom,
   useListenRoom, flattenWords,
 } from '../hooks/useRoom'
+// 1. TAMBAHKAN IMPORT INI DI SINI
+import { QRCodeSVG } from 'qrcode.react'
 
 const COLORS = ['var(--teal)', 'var(--gold)', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#60a5fa', '#fbbf24']
 
@@ -108,8 +110,23 @@ function WordCloud() {
     <div className="card" style={{ border: '1.5px solid rgba(0,200,224,0.35)', boxShadow: '0 0 20px rgba(0,200,224,0.08)', marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
         <div style={{ textAlign: 'center' }}>
-          <img src={qrUrl(liveCode)} alt="QR" width={130} height={130}
-            style={{ borderRadius: 10, border: '3px solid rgba(0,200,224,0.3)', display: 'block' }} />
+          
+          {/* 2. BAGIAN INI TELAH DIREVISI MENGGUNAKAN QRCodeSVG */}
+          <div style={{ 
+            background: '#ffffff', 
+            padding: '8px', 
+            borderRadius: '10px', 
+            border: '3px solid rgba(0,200,224,0.3)', 
+            display: 'inline-block' 
+          }}>
+            <QRCodeSVG 
+              value={joinUrl(liveCode)} 
+              size={114} 
+              level="H" 
+            />
+          </div>
+          {/* =================================================== */}
+
           <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 5 }}>Scan to Join</div>
         </div>
         <div style={{ flex: 1, minWidth: 160 }}>
