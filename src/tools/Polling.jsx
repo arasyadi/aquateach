@@ -188,7 +188,7 @@ function Polling() {
   return (
     <>
       {/* ─── Present Mode (mengikuti gaya OpinionLine) ─────────────────────── */}
-      {presentMode && phase === 'results' && (
+      {presentMode && (
         <div className="present-mode" style={{ alignItems: 'center', justifyContent: 'center' }}>
           <button className="btn btn-outline btn-sm present-close" onClick={() => setPresentMode(false)}>
             ✕ Tutup
@@ -331,7 +331,7 @@ function Polling() {
               {/* ↓ DIUBAH: tombol "Lihat Hasil" muncul di dua kondisi */}
               {!liveCode && <button className="btn btn-gold" onClick={() => setPhase('results')}>📊 Tampilkan Hasil</button>}
               {liveCode && liveClosed && <button className="btn btn-gold" onClick={() => setPhase('results')}>📊 Lihat Hasil</button>}
-              {liveCode && !liveClosed && <button className="btn btn-gold" onClick={async () => { await endLive(); setPhase('results'); setPresentMode(true) }}>⛶ Mode Presentasi</button>}
+              {liveCode && !liveClosed && <button className="btn btn-teal" onClick={() => setPresentMode(true)}>⛶ Mode Presentasi</button>}
               <button className="btn btn-outline" onClick={reset}>Reset</button>
             </div>
           </div>
