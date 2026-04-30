@@ -5,6 +5,7 @@ import {
   useListenRoom, countVotes,
 } from '../hooks/useRoom'
 import { QRCodeSVG } from 'qrcode.react'
+import QRModal, { QRClickable } from '../components/QRModal'            // ← NEW
 
 const COLORS     = ['var(--teal)', 'var(--gold)', '#a78bfa', '#fb923c', '#34d399', '#f472b6']
 const COLORS_HEX = ['#00c8e0',    '#ffc847',     '#a78bfa', '#fb923c', '#34d399', '#f472b6']
@@ -20,6 +21,7 @@ function Polling() {
   const [liveLoading, setLiveLoading] = useState(false)
   const [copied, setCopied]           = useState(false)
   const [liveClosed, setLiveClosed]   = useState(false)
+  const [qrOpen, setQrOpen]           = useState(false)                 // ← NEW
 
   const { data: roomData } = useListenRoom(liveCode)
 
@@ -66,7 +68,7 @@ function Polling() {
       setLiveCode(code)
       setLiveClosed(false)
       setPhase('voting')
-      setPresentMode(true)   // langsung buka layar Slido-style
+      setPresentMode(true)
     } catch (e) {
       alert('Gagal membuat sesi live. Pastikan Firebase sudah dikonfigurasi.\n\n' + e.message)
     }
@@ -84,174 +86,189 @@ function Polling() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // ── Slido-style fullscreen (Live) ────────────────────────────────────────
+  // ── Slido-style fullscreen (Live) ─────────────────────────────────────────
   if (presentMode && liveCode) {
     return (
-      <div style={{
-        position: 'fixed', inset: 0, background: '#060d1a', zIndex: 1000,
-        display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-b)',
-      }}>
-        {/* Top bar */}
+      <>
+        {/* ── QR MODAL (accessible from fullscreen too) ── */}
+        <QRModal                                                         // ← NEW
+          open={qrOpen}
+          onClose={() => setQrOpen(false)}
+          value={joinUrl(liveCode)}
+          code={liveCode}
+          question={question}
+          totalVotes={totalVotes}
+        />
+
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '11px 22px', borderBottom: '1px solid rgba(0,200,224,0.13)',
-          flexShrink: 0, background: 'rgba(10,21,37,0.95)',
+          position: 'fixed', inset: 0, background: '#060d1a', zIndex: 1000,
+          display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-b)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 18 }}>📊</span>
-            <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--teal)', fontSize: 14 }}>
-              AquaTeach — Live Polling
-            </span>
-            <span className="badge badge-teal" style={{ display: 'inline-flex', gap: 5, marginLeft: 6 }}>
-              <span className="phase-dot phase-dot-active" />
-              {totalVotes} suara masuk
-            </span>
-            {liveClosed && (
-              <span className="badge" style={{
-                background: 'rgba(248,113,113,0.15)', color: '#f87171',
-                border: '1px solid rgba(248,113,113,0.3)', marginLeft: 4,
-              }}>🔒 Sesi Ditutup</span>
-            )}
+          {/* Top bar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '11px 22px', borderBottom: '1px solid rgba(0,200,224,0.13)',
+            flexShrink: 0, background: 'rgba(10,21,37,0.95)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>📊</span>
+              <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--teal)', fontSize: 14 }}>
+                AquaTeach — Live Polling
+              </span>
+              <span className="badge badge-teal" style={{ display: 'inline-flex', gap: 5, marginLeft: 6 }}>
+                <span className="phase-dot phase-dot-active" />
+                {totalVotes} suara masuk
+              </span>
+              {liveClosed && (
+                <span className="badge" style={{
+                  background: 'rgba(248,113,113,0.15)', color: '#f87171',
+                  border: '1px solid rgba(248,113,113,0.3)', marginLeft: 4,
+                }}>🔒 Sesi Ditutup</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {!liveClosed
+                ? <button className="btn btn-gold btn-sm" onClick={endLive}>🔒 Tutup Voting</button>
+                : <button className="btn btn-outline btn-sm" onClick={() => { setPresentMode(false); setPhase('results') }}>
+                    📋 Lihat Hasil
+                  </button>
+              }
+              <button className="btn btn-ghost btn-sm" onClick={() => setPresentMode(false)}>✕ Keluar</button>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {!liveClosed
-              ? <button className="btn btn-gold btn-sm" onClick={endLive}>🔒 Tutup Voting</button>
-              : <button className="btn btn-outline btn-sm" onClick={() => { setPresentMode(false); setPhase('results') }}>
-                  📋 Lihat Hasil
+
+          {/* Body: sidebar + chart */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
+            {/* LEFT sidebar */}
+            <div style={{
+              width: 286, flexShrink: 0, background: 'rgba(9,18,34,0.97)',
+              borderRight: '1px solid rgba(0,200,224,0.1)', display: 'flex',
+              flexDirection: 'column', padding: '24px 18px', gap: 18, overflowY: 'auto',
+            }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 7 }}>
+                  Pertanyaan
+                </div>
+                <div style={{ fontFamily: 'var(--font-h)', fontSize: 13.5, fontWeight: 700, color: 'var(--white)', lineHeight: 1.55 }}>
+                  "{question}"
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
+
+              {/* QR — CLICKABLE */}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 10 }}>
+                  Scan untuk bergabung
+                </div>
+                <QRClickable                                             // ← CHANGED
+                  value={joinUrl(liveCode)}
+                  size={216}
+                  onClick={() => setQrOpen(true)}
+                />
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 10 }}>
+                  Klik untuk perbesar
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 5 }}>
+                  Kode Room
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 30, letterSpacing: 8,
+                  color: 'var(--teal)', lineHeight: 1, textShadow: '0 0 24px rgba(0,200,224,0.45)',
+                }}>{liveCode}</div>
+                <div style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 5, wordBreak: 'break-all', lineHeight: 1.4 }}>
+                  {joinUrl(liveCode)}
+                </div>
+                <button className="btn btn-outline btn-sm" style={{ marginTop: 9, width: '100%', fontSize: 12 }} onClick={copyLink}>
+                  {copied ? '✓ Tersalin!' : '📋 Salin Link'}
                 </button>
-            }
-            <button className="btn btn-ghost btn-sm" onClick={() => setPresentMode(false)}>✕ Keluar</button>
-          </div>
-        </div>
-
-        {/* Body: sidebar + chart */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-
-          {/* LEFT sidebar */}
-          <div style={{
-            width: 286, flexShrink: 0, background: 'rgba(9,18,34,0.97)',
-            borderRight: '1px solid rgba(0,200,224,0.1)', display: 'flex',
-            flexDirection: 'column', padding: '24px 18px', gap: 18, overflowY: 'auto',
-          }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 7 }}>
-                Pertanyaan
               </div>
-              <div style={{ fontFamily: 'var(--font-h)', fontSize: 13.5, fontWeight: 700, color: 'var(--white)', lineHeight: 1.55 }}>
-                "{question}"
+
+              <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
+
+              <div style={{ textAlign: 'center' }}>
+                <div style={{
+                  fontFamily: 'var(--font-h)', fontSize: 44, fontWeight: 900,
+                  color: 'var(--teal)', lineHeight: 1, textShadow: '0 0 20px rgba(0,200,224,0.4)',
+                }}>{totalVotes}</div>
+                <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>suara masuk</div>
               </div>
-            </div>
 
-            <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
-
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 10 }}>
-                Scan untuk bergabung
-              </div>
-              <div style={{
-                background: '#fff', padding: '12px', borderRadius: '16px', display: 'inline-block',
-                boxShadow: '0 0 36px rgba(0,200,224,0.3), 0 0 8px rgba(0,0,0,0.5)',
-              }}>
-                <QRCodeSVG value={joinUrl(liveCode)} size={216} level="H" />
-              </div>
-            </div>
-
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 5 }}>
-                Kode Room
-              </div>
-              <div style={{
-                fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 30, letterSpacing: 8,
-                color: 'var(--teal)', lineHeight: 1, textShadow: '0 0 24px rgba(0,200,224,0.45)',
-              }}>{liveCode}</div>
-              <div style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 5, wordBreak: 'break-all', lineHeight: 1.4 }}>
-                {joinUrl(liveCode)}
-              </div>
-              <button className="btn btn-outline btn-sm" style={{ marginTop: 9, width: '100%', fontSize: 12 }} onClick={copyLink}>
-                {copied ? '✓ Tersalin!' : '📋 Salin Link'}
-              </button>
-            </div>
-
-            <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
-
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                fontFamily: 'var(--font-h)', fontSize: 44, fontWeight: 900,
-                color: 'var(--teal)', lineHeight: 1, textShadow: '0 0 20px rgba(0,200,224,0.4)',
-              }}>{totalVotes}</div>
-              <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>suara masuk</div>
-            </div>
-
-            {totalVotes > 0 && (
-              <div style={{
-                background: 'rgba(0,200,224,0.07)', border: '1px solid rgba(0,200,224,0.18)',
-                borderRadius: 10, padding: '10px 12px', textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>Terdepan</div>
-                <div style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: COLORS_HEX[topIdx % COLORS_HEX.length], fontSize: 15 }}>
-                  {String.fromCharCode(65 + topIdx)}. "{validOptions[topIdx]}"
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                  {displayVotes[topIdx]} suara · {Math.round((displayVotes[topIdx] / totalVotes) * 100)}%
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT — bar chart */}
-          <div style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '32px 48px', overflow: 'auto',
-            backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(0,200,224,0.03) 0%, transparent 60%)',
-          }}>
-            <div style={{ width: '100%', maxWidth: 860 }}>
-              {validOptions.map((opt, i) => {
-                const pct   = totalVotes > 0 ? Math.round((displayVotes[i] / totalVotes) * 100) : 0
-                const isTop = i === topIdx && totalVotes > 0
-                const hex   = COLORS_HEX[i % COLORS_HEX.length]
-                return (
-                  <div key={i} style={{ marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        {isTop && <span style={{ fontSize: 20 }}>🏆</span>}
-                        <div style={{
-                          width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                          background: hex + '22', color: hex, fontWeight: 900,
-                          fontFamily: 'var(--font-h)', fontSize: 15,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>{String.fromCharCode(65 + i)}</div>
-                        <span style={{
-                          fontFamily: 'var(--font-h)', fontWeight: 700,
-                          fontSize: 'clamp(14px, 2vw, 20px)', color: 'var(--white)',
-                        }}>{opt}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexShrink: 0 }}>
-                        <span style={{
-                          fontFamily: 'var(--font-h)', fontWeight: 900,
-                          fontSize: 'clamp(22px, 3.5vw, 38px)', color: hex, lineHeight: 1,
-                        }}>{pct}%</span>
-                        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{displayVotes[i] ?? 0}</span>
-                      </div>
-                    </div>
-                    <div style={{
-                      background: 'rgba(255,255,255,0.06)', borderRadius: 99, height: 28, overflow: 'hidden',
-                      border: isTop ? `1.5px solid ${hex}55` : '1px solid rgba(255,255,255,0.08)',
-                      boxShadow: isTop ? `0 0 18px ${hex}30` : 'none',
-                    }}>
-                      <div style={{
-                        height: '100%', width: `${pct}%`, borderRadius: 99,
-                        background: `linear-gradient(90deg, ${hex}99, ${hex})`,
-                        transition: 'width 0.6s cubic-bezier(0.34, 1.3, 0.64, 1)',
-                        boxShadow: isTop ? `0 0 12px ${hex}88` : 'none',
-                      }} />
-                    </div>
+              {totalVotes > 0 && (
+                <div style={{
+                  background: 'rgba(0,200,224,0.07)', border: '1px solid rgba(0,200,224,0.18)',
+                  borderRadius: 10, padding: '10px 12px', textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>Terdepan</div>
+                  <div style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: COLORS_HEX[topIdx % COLORS_HEX.length], fontSize: 15 }}>
+                    {String.fromCharCode(65 + topIdx)}. "{validOptions[topIdx]}"
                   </div>
-                )
-              })}
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                    {displayVotes[topIdx]} suara · {Math.round((displayVotes[topIdx] / totalVotes) * 100)}%
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT — bar chart */}
+            <div style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '32px 48px', overflow: 'auto',
+              backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(0,200,224,0.03) 0%, transparent 60%)',
+            }}>
+              <div style={{ width: '100%', maxWidth: 860 }}>
+                {validOptions.map((opt, i) => {
+                  const pct   = totalVotes > 0 ? Math.round((displayVotes[i] / totalVotes) * 100) : 0
+                  const isTop = i === topIdx && totalVotes > 0
+                  const hex   = COLORS_HEX[i % COLORS_HEX.length]
+                  return (
+                    <div key={i} style={{ marginBottom: 24 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {isTop && <span style={{ fontSize: 20 }}>🏆</span>}
+                          <div style={{
+                            width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                            background: hex + '22', color: hex, fontWeight: 900,
+                            fontFamily: 'var(--font-h)', fontSize: 15,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>{String.fromCharCode(65 + i)}</div>
+                          <span style={{
+                            fontFamily: 'var(--font-h)', fontWeight: 700,
+                            fontSize: 'clamp(14px, 2vw, 20px)', color: 'var(--white)',
+                          }}>{opt}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexShrink: 0 }}>
+                          <span style={{
+                            fontFamily: 'var(--font-h)', fontWeight: 900,
+                            fontSize: 'clamp(22px, 3.5vw, 38px)', color: hex, lineHeight: 1,
+                          }}>{pct}%</span>
+                          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{displayVotes[i] ?? 0}</span>
+                        </div>
+                      </div>
+                      <div style={{
+                        background: 'rgba(255,255,255,0.06)', borderRadius: 99, height: 28, overflow: 'hidden',
+                        border: isTop ? `1.5px solid ${hex}55` : '1px solid rgba(255,255,255,0.08)',
+                        boxShadow: isTop ? `0 0 18px ${hex}30` : 'none',
+                      }}>
+                        <div style={{
+                          height: '100%', width: `${pct}%`, borderRadius: 99,
+                          background: `linear-gradient(90deg, ${hex}99, ${hex})`,
+                          transition: 'width 0.6s cubic-bezier(0.34, 1.3, 0.64, 1)',
+                          boxShadow: isTop ? `0 0 12px ${hex}88` : 'none',
+                        }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </>
     )
   }
 
@@ -319,15 +336,16 @@ function Polling() {
       border: '1.5px solid rgba(0,200,224,0.35)', boxShadow: '0 0 20px rgba(0,200,224,0.08)', marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
+        {/* QR — CLICKABLE */}
         <div style={{ textAlign: 'center' }}>
-          <div style={{
-            background: '#fff', padding: '11px', borderRadius: '14px',
-            border: '3px solid rgba(0,200,224,0.28)', display: 'inline-block',
-            boxShadow: '0 0 28px rgba(0,200,224,0.22)',
-          }}>
-            <QRCodeSVG value={joinUrl(liveCode)} size={200} level="H" />
+          <QRClickable                                                   // ← CHANGED
+            value={joinUrl(liveCode)}
+            size={200}
+            onClick={() => setQrOpen(true)}
+          />
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 12 }}>
+            Klik untuk perbesar
           </div>
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>Scan untuk bergabung</div>
         </div>
         <div style={{ flex: 1, minWidth: 160 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -357,7 +375,6 @@ function Polling() {
     </div>
   )
 
-  // ── Compact bar results ──────────────────────────────────────────────────
   const ResultsView = () => (
     <div>
       {validOptions.map((opt, i) => {
@@ -390,6 +407,16 @@ function Polling() {
 
   return (
     <>
+      {/* ── QR MODAL ── */}
+      <QRModal                                                           // ← NEW
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        value={joinUrl(liveCode ?? '')}
+        code={liveCode}
+        question={question}
+        totalVotes={totalVotes}
+      />
+
       <div className="page-hdr">
         <div className="page-hdr-top">
           <div className="page-hdr-icon">📊</div>
@@ -451,7 +478,7 @@ function Polling() {
             </button>
           </div>
           <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, lineHeight: 1.6 }}>
-            🔴 <strong style={{ color: 'var(--white)' }}>Go Live</strong> → layar presentasi Slido-style langsung terbuka — QR + hasil live di proyektor ·{' '}
+            🔴 <strong style={{ color: 'var(--white)' }}>Go Live</strong> → layar presentasi Slido-style langsung terbuka · 
             🖥️ <strong style={{ color: 'var(--white)' }}>Manual</strong> → klik langsung di perangkat dosen
           </p>
         </div>
