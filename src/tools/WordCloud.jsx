@@ -5,6 +5,7 @@ import {
   useListenRoom, flattenWords,
 } from '../hooks/useRoom'
 import { QRCodeSVG } from 'qrcode.react'
+import QRModal, { QRClickable } from '../components/QRModal'            // ← NEW
 
 const COLORS = ['var(--teal)', 'var(--gold)', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#60a5fa', '#fbbf24']
 const COLORS_HEX = ['#00c8e0', '#ffc847', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#60a5fa', '#fbbf24']
@@ -17,11 +18,11 @@ function WordCloud() {
   const [words, setWords]         = useState([])
   const [presentMode, setPresentMode] = useState(false)
 
-  // Live mode
   const [liveCode, setLiveCode]       = useState(null)
   const [liveLoading, setLiveLoading] = useState(false)
   const [copied, setCopied]           = useState(false)
   const [liveClosed, setLiveClosed]   = useState(false)
+  const [qrOpen, setQrOpen]           = useState(false)                 // ← NEW
 
   const { data: roomData } = useListenRoom(liveCode)
 
@@ -54,7 +55,6 @@ function WordCloud() {
   const getSize      = (freq, big) => (big ? 18 : 14) + (freq / maxFreq) * (big ? 52 : 32)
   const getChipSize  = (freq, big) => (big ? 20 : 15) + (freq / maxFreq) * (big ? 46 : 28)
 
-  /* ── submit kata manual ── */
   const submitWords = () => {
     const parsed = input.trim().split(/[,\s]+/).filter(w => w.length > 1).slice(0, maxWords)
     if (!parsed.length) return
@@ -76,7 +76,7 @@ function WordCloud() {
       setLiveCode(code)
       setLiveClosed(false)
       setPhase('collecting')
-      setPresentMode(true)       // langsung buka layar presentasi ala Slido
+      setPresentMode(true)
     } catch (e) {
       alert('Gagal membuat sesi live. Cek konfigurasi Firebase.\n\n' + e.message)
     }
@@ -94,15 +94,9 @@ function WordCloud() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  /* ══════════════════════════════════════════════════
-     CLOUD CHIP — Slido-style pill dengan latar warna
-  ══════════════════════════════════════════════════ */
   const CloudChips = ({ big = false }) => (
     <div style={{
-      display: 'flex',
-      flexWrap: 'wrap',
-      alignItems: 'center',
-      justifyContent: 'center',
+      display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center',
       gap: big ? '14px 18px' : '8px 10px',
       padding: big ? '32px' : '16px',
       minHeight: big ? 260 : 130,
@@ -117,33 +111,23 @@ function WordCloud() {
         const hex = COLORS_HEX[i % COLORS_HEX.length]
         const rot = rotations[word] ?? 0
         return (
-          <span
-            key={word}
-            style={{
-              fontSize: sz,
-              fontFamily: 'var(--font-h)',
-              fontWeight: freq > 1 ? 800 : 600,
-              color: '#fff',
-              background: hex + '2a',
-              border: `1.5px solid ${hex}60`,
-              borderRadius: '10px',
-              padding: `${Math.round(sz * 0.22)}px ${Math.round(sz * 0.55)}px`,
-              transform: `rotate(${rot}deg)`,
-              display: 'inline-block',
-              animation: 'pop 0.35s ease',
-              lineHeight: 1.2,
-              backdropFilter: 'blur(4px)',
-              transition: 'font-size 0.5s cubic-bezier(.34,1.5,.64,1)',
-              cursor: 'default',
-              userSelect: 'none',
-            }}
-          >{word}</span>
+          <span key={word} style={{
+            fontSize: sz, fontFamily: 'var(--font-h)',
+            fontWeight: freq > 1 ? 800 : 600, color: '#fff',
+            background: hex + '2a', border: `1.5px solid ${hex}60`,
+            borderRadius: '10px',
+            padding: `${Math.round(sz * 0.22)}px ${Math.round(sz * 0.55)}px`,
+            transform: `rotate(${rot}deg)`, display: 'inline-block',
+            animation: 'pop 0.35s ease', lineHeight: 1.2,
+            backdropFilter: 'blur(4px)',
+            transition: 'font-size 0.5s cubic-bezier(.34,1.5,.64,1)',
+            cursor: 'default', userSelect: 'none',
+          }}>{word}</span>
         )
       })}
     </div>
   )
 
-  /* ── plain cloud (manual / results) ── */
   const CloudDisplay = () => (
     <div className="word-cloud-area">
       {sortedWords.length === 0 ? (
@@ -161,177 +145,144 @@ function WordCloud() {
     </div>
   )
 
-  /* ══════════════════════════════════════════════════
-     SLIDO-STYLE LIVE PRESENTATION MODE (fullscreen)
-  ══════════════════════════════════════════════════ */
+  /* ── SLIDO-STYLE LIVE PRESENTATION MODE ── */
   if (presentMode && liveCode) {
     return (
-      <div style={{
-        position: 'fixed', inset: 0,
-        background: '#060d1a',
-        zIndex: 1000,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        fontFamily: 'var(--font-b)',
-      }}>
-        {/* ── top bar ── */}
+      <>
+        {/* ── QR MODAL ── */}
+        <QRModal                                                         // ← NEW
+          open={qrOpen}
+          onClose={() => setQrOpen(false)}
+          value={joinUrl(liveCode)}
+          code={liveCode}
+          question={prompt}
+          totalVotes={displayWords.length}
+        />
+
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '11px 22px',
-          borderBottom: '1px solid rgba(0,200,224,0.13)',
-          flexShrink: 0,
-          background: 'rgba(10,21,37,0.95)',
+          position: 'fixed', inset: 0, background: '#060d1a', zIndex: 1000,
+          display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-b)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 18 }}>☁️</span>
-            <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--teal)', fontSize: 14 }}>
-              AquaTeach — Word Cloud Live
-            </span>
-            <span className="badge badge-teal" style={{ display: 'inline-flex', gap: 5, marginLeft: 6 }}>
-              <span className="phase-dot phase-dot-active" />
-              {displayWords.length} kata · {Object.keys(wordFreq).length} unik
-            </span>
-            {liveClosed && (
-              <span className="badge" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)', marginLeft: 4 }}>
-                🔒 Sesi Ditutup
+          {/* top bar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '11px 22px', borderBottom: '1px solid rgba(0,200,224,0.13)',
+            flexShrink: 0, background: 'rgba(10,21,37,0.95)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>☁️</span>
+              <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--teal)', fontSize: 14 }}>
+                AquaTeach — Word Cloud Live
               </span>
-            )}
+              <span className="badge badge-teal" style={{ display: 'inline-flex', gap: 5, marginLeft: 6 }}>
+                <span className="phase-dot phase-dot-active" />
+                {displayWords.length} kata · {Object.keys(wordFreq).length} unik
+              </span>
+              {liveClosed && (
+                <span className="badge" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)', marginLeft: 4 }}>
+                  🔒 Sesi Ditutup
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {!liveClosed
+                ? <button className="btn btn-gold btn-sm" onClick={endLive}>🔒 Tutup Sesi</button>
+                : <button className="btn btn-outline btn-sm" onClick={() => { setPresentMode(false); setPhase('results') }}>📋 Lihat Hasil</button>
+              }
+              <button className="btn btn-ghost btn-sm" onClick={() => setPresentMode(false)}>✕ Keluar</button>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {!liveClosed
-              ? <button className="btn btn-gold btn-sm" onClick={endLive}>🔒 Tutup Sesi</button>
-              : <button className="btn btn-outline btn-sm" onClick={() => { setPresentMode(false); setPhase('results') }}>
-                  📋 Lihat Hasil
-                </button>
-            }
-            <button className="btn btn-ghost btn-sm" onClick={() => setPresentMode(false)}>✕ Keluar</button>
-          </div>
-        </div>
 
-        {/* ── body: sidebar + cloud ── */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* body: sidebar + cloud */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-          {/* LEFT sidebar — QR + info */}
-          <div style={{
-            width: 286,
-            flexShrink: 0,
-            background: 'rgba(9,18,34,0.97)',
-            borderRight: '1px solid rgba(0,200,224,0.1)',
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '24px 18px',
-            gap: 18,
-            overflowY: 'auto',
-          }}>
-            {/* Question */}
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 7 }}>
-                Pertanyaan
+            {/* LEFT sidebar */}
+            <div style={{
+              width: 286, flexShrink: 0, background: 'rgba(9,18,34,0.97)',
+              borderRight: '1px solid rgba(0,200,224,0.1)', display: 'flex',
+              flexDirection: 'column', padding: '24px 18px', gap: 18, overflowY: 'auto',
+            }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 7 }}>
+                  Pertanyaan
+                </div>
+                <div style={{ fontFamily: 'var(--font-h)', fontSize: 13.5, fontWeight: 700, color: 'var(--white)', lineHeight: 1.55 }}>
+                  "{prompt}"
+                </div>
               </div>
-              <div style={{ fontFamily: 'var(--font-h)', fontSize: 13.5, fontWeight: 700, color: 'var(--white)', lineHeight: 1.55 }}>
-                "{prompt}"
-              </div>
-            </div>
 
-            <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
+              <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
 
-            {/* Big QR */}
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 10 }}>
-                Scan untuk bergabung
+              {/* QR — CLICKABLE */}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 10 }}>
+                  Scan untuk bergabung
+                </div>
+                <QRClickable                                             // ← CHANGED
+                  value={joinUrl(liveCode)}
+                  size={216}
+                  onClick={() => setQrOpen(true)}
+                />
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 10 }}>
+                  Klik untuk perbesar
+                </div>
               </div>
-              <div style={{
-                background: '#fff',
-                padding: '12px',
-                borderRadius: '16px',
-                display: 'inline-block',
-                boxShadow: '0 0 36px rgba(0,200,224,0.3), 0 0 8px rgba(0,0,0,0.5)',
-              }}>
-                <QRCodeSVG value={joinUrl(liveCode)} size={216} level="H" />
-              </div>
-            </div>
 
-            {/* Room code */}
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 5 }}>
-                Kode Room
-              </div>
-              <div style={{
-                fontFamily: 'var(--font-h)', fontWeight: 900,
-                fontSize: 30, letterSpacing: 8,
-                color: 'var(--teal)', lineHeight: 1,
-                textShadow: '0 0 24px rgba(0,200,224,0.45)',
-              }}>
-                {liveCode}
-              </div>
-              <div style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 5, wordBreak: 'break-all', lineHeight: 1.4 }}>
-                {joinUrl(liveCode)}
-              </div>
-              <button
-                className="btn btn-outline btn-sm"
-                style={{ marginTop: 9, width: '100%', fontSize: 12 }}
-                onClick={copyLink}
-              >
-                {copied ? '✓ Tersalin!' : '📋 Salin Link'}
-              </button>
-            </div>
-
-            <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
-
-            {/* Live stats */}
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                fontFamily: 'var(--font-h)', fontSize: 44, fontWeight: 900,
-                color: 'var(--teal)', lineHeight: 1,
-                textShadow: '0 0 20px rgba(0,200,224,0.4)',
-              }}>
-                {displayWords.length}
-              </div>
-              <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>
-                kata masuk
-              </div>
-            </div>
-
-            {/* Top word */}
-            {sortedWords[0] && (
-              <div style={{
-                background: 'rgba(0,200,224,0.07)',
-                border: '1px solid rgba(0,200,224,0.18)',
-                borderRadius: 10, padding: '10px 12px',
-                textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>Terpopuler</div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 5 }}>
+                  Kode Room
+                </div>
                 <div style={{
-                  fontFamily: 'var(--font-h)', fontWeight: 800,
-                  color: 'var(--teal)', fontSize: 16,
-                }}>
-                  "{sortedWords[0][0]}"
+                  fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 30, letterSpacing: 8,
+                  color: 'var(--teal)', lineHeight: 1, textShadow: '0 0 24px rgba(0,200,224,0.45)',
+                }}>{liveCode}</div>
+                <div style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 5, wordBreak: 'break-all', lineHeight: 1.4 }}>
+                  {joinUrl(liveCode)}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                  × {sortedWords[0][1]} responden
-                </div>
+                <button className="btn btn-outline btn-sm" style={{ marginTop: 9, width: '100%', fontSize: 12 }} onClick={copyLink}>
+                  {copied ? '✓ Tersalin!' : '📋 Salin Link'}
+                </button>
               </div>
-            )}
-          </div>
 
-          {/* RIGHT — Live Word Cloud (chip style) */}
-          <div style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            overflow: 'auto',
-            // subtle grid texture
-            backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(0,200,224,0.03) 0%, transparent 60%)',
-          }}>
-            <div style={{ width: '100%', maxWidth: 900 }}>
-              <CloudChips big />
+              <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
+
+              <div style={{ textAlign: 'center' }}>
+                <div style={{
+                  fontFamily: 'var(--font-h)', fontSize: 44, fontWeight: 900,
+                  color: 'var(--teal)', lineHeight: 1, textShadow: '0 0 20px rgba(0,200,224,0.4)',
+                }}>{displayWords.length}</div>
+                <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>kata masuk</div>
+              </div>
+
+              {sortedWords[0] && (
+                <div style={{
+                  background: 'rgba(0,200,224,0.07)', border: '1px solid rgba(0,200,224,0.18)',
+                  borderRadius: 10, padding: '10px 12px', textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>Terpopuler</div>
+                  <div style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--teal)', fontSize: 16 }}>
+                    "{sortedWords[0][0]}"
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                    × {sortedWords[0][1]} responden
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT — Live Word Cloud */}
+            <div style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '20px', overflow: 'auto',
+              backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(0,200,224,0.03) 0%, transparent 60%)',
+            }}>
+              <div style={{ width: '100%', maxWidth: 900 }}>
+                <CloudChips big />
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </>
     )
   }
 
@@ -356,11 +307,19 @@ function WordCloud() {
     )
   }
 
-  /* ══════════════════════════════════════════════════
-     NORMAL UI (setup / collecting / results)
-  ══════════════════════════════════════════════════ */
+  /* ── NORMAL UI ── */
   return (
     <>
+      {/* ── QR MODAL ── */}
+      <QRModal                                                           // ← NEW
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        value={joinUrl(liveCode ?? '')}
+        code={liveCode}
+        question={prompt}
+        totalVotes={displayWords.length}
+      />
+
       <div className="page-hdr">
         <div className="page-hdr-top">
           <div className="page-hdr-icon">☁️</div>
@@ -371,7 +330,7 @@ function WordCloud() {
         </div>
       </div>
 
-      {/* ── SETUP ── */}
+      {/* SETUP */}
       {phase === 'setup' && (
         <div className="card anim-fade-up">
           <div className="form-group">
@@ -396,35 +355,25 @@ function WordCloud() {
               onClick={() => setPhase('collecting')} disabled={!prompt.trim()}>
               🖥️ Mulai Manual
             </button>
-            <button
-              className="btn btn-lg"
-              style={{
-                flex: 1,
-                background: 'linear-gradient(135deg,#ff4757,#c0392b)',
-                color: '#fff', border: 'none',
-                opacity: (!prompt.trim() || liveLoading) ? 0.5 : 1,
-              }}
-              onClick={goLive} disabled={!prompt.trim() || liveLoading}
-            >
+            <button className="btn btn-lg"
+              style={{ flex: 1, background: 'linear-gradient(135deg,#ff4757,#c0392b)', color: '#fff', border: 'none',
+                opacity: (!prompt.trim() || liveLoading) ? 0.5 : 1 }}
+              onClick={goLive} disabled={!prompt.trim() || liveLoading}>
               {liveLoading ? '⏳ Membuat sesi...' : '🔴 Go Live'}
             </button>
           </div>
           <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 9, lineHeight: 1.6 }}>
-            🔴 <strong style={{ color: 'var(--white)' }}>Go Live</strong> → layar presentasi Slido-style langsung terbuka — QR + word cloud live bersamaan di proyektor<br />
+            🔴 <strong style={{ color: 'var(--white)' }}>Go Live</strong> → layar presentasi Slido-style langsung terbuka<br />
             🖥️ <strong style={{ color: 'var(--white)' }}>Manual</strong> → input kata langsung di perangkat dosen
           </p>
         </div>
       )}
 
-      {/* ── COLLECTING ── */}
+      {/* COLLECTING */}
       {phase === 'collecting' && (
         <div className="anim-fade-up">
-          {/* Live status bar */}
           {liveCode && (
-            <div className="card mb-16" style={{
-              border: '1.5px solid rgba(0,200,224,0.35)',
-              boxShadow: '0 0 20px rgba(0,200,224,0.08)',
-            }}>
+            <div className="card mb-16" style={{ border: '1.5px solid rgba(0,200,224,0.35)', boxShadow: '0 0 20px rgba(0,200,224,0.08)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -438,14 +387,10 @@ function WordCloud() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button className="btn btn-teal btn-sm" onClick={() => setPresentMode(true)}>
-                    ⛶ Buka Presentasi Slido
-                  </button>
+                  <button className="btn btn-teal btn-sm" onClick={() => setPresentMode(true)}>⛶ Buka Presentasi Slido</button>
                   {!liveClosed
                     ? <button className="btn btn-gold btn-sm" onClick={endLive}>🔒 Tutup Sesi</button>
-                    : <span className="badge" style={{ background:'rgba(248,113,113,0.15)', color:'#f87171', border:'1px solid rgba(248,113,113,0.3)', padding:'6px 12px' }}>
-                        🔒 Ditutup
-                      </span>
+                    : <span className="badge" style={{ background:'rgba(248,113,113,0.15)', color:'#f87171', border:'1px solid rgba(248,113,113,0.3)', padding:'6px 12px' }}>🔒 Ditutup</span>
                   }
                 </div>
               </div>
@@ -473,30 +418,20 @@ function WordCloud() {
                   <div style={{ fontFamily: 'var(--font-h)', fontSize: 36, fontWeight: 800, color: 'var(--teal)', lineHeight: 1 }}>
                     {displayWords.length}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, marginBottom: 16 }}>
-                    kata terkumpul
-                  </div>
-                  <button className="btn btn-teal btn-sm" onClick={() => setPresentMode(true)}>
-                    ⛶ Buka Presentasi Live
-                  </button>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, marginBottom: 16 }}>kata terkumpul</div>
+                  <button className="btn btn-teal btn-sm" onClick={() => setPresentMode(true)}>⛶ Buka Presentasi Live</button>
                 </div>
               ) : (
                 <>
                   <div className="form-label mb-12">Input Kata (pisah koma/spasi)</div>
-                  <textarea
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
+                  <textarea value={input} onChange={e => setInput(e.target.value)}
                     placeholder={`Contoh: tangkap, laut, ikan (maks ${maxWords} kata)`}
                     rows={3}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitWords() } }}
                   />
                   <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-                    <button className="btn btn-teal" onClick={submitWords} disabled={!input.trim()}>
-                      + Tambah Kata
-                    </button>
-                    <button className="btn btn-gold" onClick={() => setPhase('results')}>
-                      ☁️ Tampilkan Cloud
-                    </button>
+                    <button className="btn btn-teal" onClick={submitWords} disabled={!input.trim()}>+ Tambah Kata</button>
+                    <button className="btn btn-gold" onClick={() => setPhase('results')}>☁️ Tampilkan Cloud</button>
                   </div>
                 </>
               )}
@@ -508,7 +443,6 @@ function WordCloud() {
             </div>
           </div>
 
-          {/* Frequency list */}
           {sortedWords.length > 0 && (
             <div className="card mt-16">
               <div className="form-label mb-12">Kata Terpopuler</div>
@@ -527,7 +461,7 @@ function WordCloud() {
         </div>
       )}
 
-      {/* ── RESULTS ── */}
+      {/* RESULTS */}
       {phase === 'results' && (
         <div className="anim-fade-up">
           {liveCode && (
