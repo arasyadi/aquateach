@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
+import QRModal, { QRClickable } from '../components/QRModal'            // ← NEW
 import {
   generateRoomCode, joinUrl,
   createRoom, closeRoom,
@@ -18,11 +19,11 @@ function OpinionLine() {
   const [correctInput, setCorrectInput] = useState('')
   const [explInput, setExplInput]   = useState('')
 
-  // ── Live mode ──────────────────────────────────────
   const [liveCode, setLiveCode]       = useState(null)
   const [liveLoading, setLiveLoading] = useState(false)
   const [copied, setCopied]           = useState(false)
   const [liveClosed, setLiveClosed]   = useState(false)
+  const [qrOpen, setQrOpen]           = useState(false)                 // ← NEW
 
   const { data: roomData } = useListenRoom(liveCode)
 
@@ -31,14 +32,13 @@ function OpinionLine() {
     return countOpinions(roomData)
   }, [liveCode, roomData])
 
-  // gunakan Firebase votes jika live, lokal jika manual
   const displayVotes = liveOpinions ?? votes
 
   const total = displayVotes.setuju + displayVotes.netral + displayVotes.tidak
   const pct   = (v) => total > 0 ? Math.round((v / total) * 100) : 0
 
   const doVote = (side) => {
-    if (hasVoted || liveCode) return   // di live mode, voting dari HP mahasiswa
+    if (hasVoted || liveCode) return
     setVotes(v => ({ ...v, [side]: v[side] + 1 }))
     setSelectedVote(side)
     setHasVoted(true)
@@ -88,19 +88,16 @@ function OpinionLine() {
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
 
-        {/* QR besar */}
+        {/* QR besar — CLICKABLE */}
         <div style={{ textAlign: 'center' }}>
-          <div style={{
-            background: '#fff',
-            padding: '11px',
-            borderRadius: '14px',
-            border: '3px solid rgba(0,200,224,0.28)',
-            display: 'inline-block',
-            boxShadow: '0 0 28px rgba(0,200,224,0.22)',
-          }}>
-            <QRCodeSVG value={joinUrl(liveCode)} size={200} level="H" />
+          <QRClickable                                                    // ← CHANGED
+            value={joinUrl(liveCode)}
+            size={200}
+            onClick={() => setQrOpen(true)}
+          />
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 12 }}>
+            Klik QR untuk perbesar
           </div>
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>Scan untuk bergabung</div>
         </div>
 
         {/* Info */}
@@ -182,9 +179,19 @@ function OpinionLine() {
     </div>
   )
 
-  /* ── Present Mode (fullscreen) ───────────────────── */
   return (
     <>
+      {/* ── QR MODAL ────────────────────────────────────── */}
+      <QRModal                                                           // ← NEW
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        value={joinUrl(liveCode ?? '')}
+        code={liveCode}
+        question={statement}
+        totalVotes={total}
+      />
+
+      {/* ── PRESENT MODE ── */}
       {presentMode && (
         <div className="present-mode" style={{ alignItems: 'center', justifyContent: 'center' }}>
           <button className="btn btn-outline btn-sm present-close" onClick={() => setPresentMode(false)}>
@@ -195,16 +202,14 @@ function OpinionLine() {
               📍 Opinion Line
             </div>
 
-            {/* QR in present mode (if live) */}
             {liveCode && (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 28, marginBottom: 28, flexWrap: 'wrap' }}>
-                <div style={{
-                  background: '#fff', padding: '11px', borderRadius: '14px',
-                  display: 'inline-block',
-                  boxShadow: '0 0 32px rgba(0,200,224,0.3)',
-                }}>
-                  <QRCodeSVG value={joinUrl(liveCode)} size={190} level="H" />
-                </div>
+                {/* QR in present mode — CLICKABLE */}
+                <QRClickable                                             // ← CHANGED
+                  value={joinUrl(liveCode)}
+                  size={190}
+                  onClick={() => setQrOpen(true)}
+                />
                 <div style={{ textAlign: 'left' }}>
                   <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Kode Room</div>
                   <div style={{ fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 34, letterSpacing: 7, color: 'var(--teal)', marginBottom: 10 }}>
@@ -217,7 +222,6 @@ function OpinionLine() {
               </div>
             )}
 
-            {/* Statement */}
             <div style={{
               fontFamily: 'var(--font-h)', fontSize: 22, fontWeight: 700, lineHeight: 1.55,
               marginBottom: 32, color: 'var(--white)',
@@ -265,7 +269,6 @@ function OpinionLine() {
             border: '1px solid var(--border)',
           }}>
             💡 <strong style={{ color: 'var(--white)' }}>Tips:</strong> Gunakan pernyataan yang memiliki nuansa, bukan fakta biner.
-            Ini akan memancing diskusi yang lebih kaya dan membuka ruang debat.
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button
@@ -297,10 +300,8 @@ function OpinionLine() {
       {/* ── VOTING ── */}
       {phase === 'voting' && (
         <div className="anim-fade-up">
-          {/* Live QR panel */}
           {liveCode && <LivePanel />}
 
-          {/* Statement + manual vote buttons */}
           <div className="card mb-16">
             <div className="badge badge-teal mb-12" style={{ display: 'inline-flex' }}>
               <span className="phase-dot phase-dot-active" />
@@ -310,7 +311,6 @@ function OpinionLine() {
               "{statement}"
             </div>
 
-            {/* Manual vote buttons (hanya saat tidak live) */}
             {!liveCode && (
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 {[
@@ -333,13 +333,11 @@ function OpinionLine() {
             )}
           </div>
 
-          {/* Live results */}
           <div className="card mb-16">
             <div className="form-label mb-16">Distribusi Suara Real-time</div>
             <ResultsView />
           </div>
 
-          {/* Reveal section */}
           <div className="card mb-16">
             <div className="form-label mb-12">Ungkap Posisi Dosen (Opsional)</div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
