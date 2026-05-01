@@ -1,14 +1,23 @@
 import { useState, useEffect } from 'react'
+import { getRoom } from './hooks/useRoom'
 import Home from './pages/Home'
-import Polling from './tools/Polling'
-import WordCloud from './tools/WordCloud'
+import Polling,          { StudentView as PollingStudent    } from './tools/Polling'
+import WordCloud,        { StudentView as WordCloudStudent  } from './tools/WordCloud'
 import QuickQuiz from './tools/QuickQuiz'
 import ThinkPairShare from './tools/ThinkPairShare'
 import OneMinutePaper from './tools/OneMinutePaper'
-import OpinionLine from './tools/OpinionLine'
+import OpinionLine,      { StudentView as OpinionStudent    } from './tools/OpinionLine'
 import CaseTrigger from './tools/CaseTrigger'
 import MisconceptionCheck from './tools/MisconceptionCheck'
-import LiveOpenResponse, { StudentJoinView } from './tools/LiveOpenResponse'
+import LiveOpenResponse, { StudentJoinView as LiveRespStudent } from './tools/LiveOpenResponse'
+
+// ── Map: room.tool → student view component ───────────────────────
+const STUDENT_VIEWS = {
+  liveresp:  LiveRespStudent,
+  polling:   PollingStudent,
+  wordcloud: WordCloudStudent,
+  opinion:   OpinionStudent,
+}
 
 const NAV = [
   { id: 'home', icon: '🏠', label: 'Dashboard' },
@@ -39,12 +48,107 @@ const COMPONENTS = {
   liveresp:      LiveOpenResponse,
 }
 
-function App() {
-  const [page, setPage]           = useState('home')
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [joinCode, setJoinCode]   = useState(null)
+// ── Shared join-page wrapper ──────────────────────────────────────
+function JoinWrap({ children }) {
+  return (
+    <div style={{
+      minHeight: '100vh', background: 'var(--bg)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '28px 18px', fontFamily: 'var(--font-b)',
+    }}>
+      <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <div style={{ fontSize: 36, marginBottom: 6 }}>🐟</div>
+        <div style={{ fontFamily: 'var(--font-h)', fontWeight: 800, fontSize: 20, color: 'var(--teal)' }}>
+          AquaTeach
+        </div>
+      </div>
+      <div style={{ width: '100%', maxWidth: 460 }}>{children}</div>
+    </div>
+  )
+}
 
-  // Detect ?join=CODE in URL → render student join view instead of main app
+// ── Student Router ────────────────────────────────────────────────
+// Reads room.tool from Firebase, then renders the correct student view.
+function StudentRouter({ code }) {
+  const [status, setStatus] = useState('loading') // loading | ready | error
+  const [tool, setTool]     = useState(null)
+
+  useEffect(() => {
+    getRoom(code)
+      .then(data => {
+        if (!data || !data.active || data.phase === 'closed') {
+          setStatus('error')
+        } else {
+          setTool(data.tool ?? null)
+          setStatus('ready')
+        }
+      })
+      .catch(() => setStatus('error'))
+  }, [code])
+
+  // ── Loading ──
+  if (status === 'loading') return (
+    <JoinWrap>
+      <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>
+        <div className="spinner" style={{ width: 32, height: 32, margin: '0 auto 16px' }} />
+        Memuat sesi...
+      </div>
+    </JoinWrap>
+  )
+
+  // ── Error / room not found ──
+  if (status === 'error') return (
+    <JoinWrap>
+      <div style={{
+        textAlign: 'center', padding: '40px 24px',
+        background: 'var(--card)', borderRadius: 'var(--r)',
+        border: '1px solid rgba(240,101,101,0.3)',
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>❌</div>
+        <div style={{ fontFamily: 'var(--font-h)', fontWeight: 700, color: 'var(--danger)', marginBottom: 8 }}>
+          Sesi tidak ditemukan
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
+          Kode <b style={{ color: 'var(--white)' }}>{code}</b> tidak valid
+          atau sesi sudah berakhir.
+        </div>
+      </div>
+    </JoinWrap>
+  )
+
+  // ── Route ke student view yang tepat ──
+  const StudentView = STUDENT_VIEWS[tool]
+
+  if (!StudentView) return (
+    <JoinWrap>
+      <div style={{
+        textAlign: 'center', padding: '40px 24px',
+        background: 'var(--card)', borderRadius: 'var(--r)',
+        border: '1px solid rgba(255,200,71,0.3)',
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🔧</div>
+        <div style={{ fontFamily: 'var(--font-h)', fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>
+          Tool tidak dikenal
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
+          Tipe sesi <b style={{ color: 'var(--white)' }}>{tool ?? 'unknown'}</b> belum mendukung
+          student join view.
+        </div>
+      </div>
+    </JoinWrap>
+  )
+
+  return <StudentView code={code} />
+}
+
+// ── Main App ──────────────────────────────────────────────────────
+function App() {
+  const [page, setPage]             = useState('home')
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [joinCode, setJoinCode]     = useState(null)
+
+  // Detect ?join=CODE in URL → render student join view
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const code = params.get('join')
@@ -53,7 +157,7 @@ function App() {
 
   // ── Student join route ──────────────────────────────────────────
   if (joinCode) {
-    return <StudentJoinView code={joinCode} />
+    return <StudentRouter code={joinCode} />
   }
 
   // ── Normal presenter app ────────────────────────────────────────
