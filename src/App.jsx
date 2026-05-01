@@ -192,9 +192,9 @@ function App() {
         </nav>
 
         <div className="sb-footer">
-          <div style={{ fontWeight: 700, color: 'var(--white)', marginBottom: 4 }}>AquaTeach v1.1</div>
-          <div>FKP Universitas Udayana</div>
-          <div>MSP — Tools Pedagogi Aktif</div>
+          <div style={{ fontWeight: 700, color: 'var(--white)', marginBottom: 4 }}>AquaTeach v1.2</div>
+          <div>MSP FKP Univ. Udayana</div>
+          <div>☕ Developed by: Andy Rasyadi</div>
         </div>
       </aside>
 
