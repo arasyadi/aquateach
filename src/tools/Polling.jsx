@@ -1,11 +1,13 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   generateRoomCode, joinUrl,
   createRoom, closeRoom,
   useListenRoom, countVotes,
+  getRoom, submitVote,
+  hasSubmitted, markSubmitted,
 } from '../hooks/useRoom'
 import { QRCodeSVG } from 'qrcode.react'
-import QRModal, { QRClickable } from '../components/QRModal'            // ← NEW
+import QRModal, { QRClickable } from '../components/QRModal'
 
 const COLORS     = ['var(--teal)', 'var(--gold)', '#a78bfa', '#fb923c', '#34d399', '#f472b6']
 const COLORS_HEX = ['#00c8e0',    '#ffc847',     '#a78bfa', '#fb923c', '#34d399', '#f472b6']
@@ -21,7 +23,7 @@ function Polling() {
   const [liveLoading, setLiveLoading] = useState(false)
   const [copied, setCopied]           = useState(false)
   const [liveClosed, setLiveClosed]   = useState(false)
-  const [qrOpen, setQrOpen]           = useState(false)                 // ← NEW
+  const [qrOpen, setQrOpen]           = useState(false)
 
   const { data: roomData } = useListenRoom(liveCode)
 
@@ -90,8 +92,7 @@ function Polling() {
   if (presentMode && liveCode) {
     return (
       <>
-        {/* ── QR MODAL (accessible from fullscreen too) ── */}
-        <QRModal                                                         // ← NEW
+        <QRModal
           open={qrOpen}
           onClose={() => setQrOpen(false)}
           value={joinUrl(liveCode)}
@@ -162,7 +163,7 @@ function Polling() {
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 10 }}>
                   Scan untuk bergabung
                 </div>
-                <QRClickable                                             // ← CHANGED
+                <QRClickable
                   value={joinUrl(liveCode)}
                   size={216}
                   onClick={() => setQrOpen(true)}
@@ -336,9 +337,8 @@ function Polling() {
       border: '1.5px solid rgba(0,200,224,0.35)', boxShadow: '0 0 20px rgba(0,200,224,0.08)', marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
-        {/* QR — CLICKABLE */}
         <div style={{ textAlign: 'center' }}>
-          <QRClickable                                                   // ← CHANGED
+          <QRClickable
             value={joinUrl(liveCode)}
             size={200}
             onClick={() => setQrOpen(true)}
@@ -382,7 +382,7 @@ function Polling() {
         const isTop = i === topIdx && totalVotes > 0
         return (
           <div key={i} className="option-row" style={isTop ? { borderColor: 'rgba(0,200,224,0.4)', boxShadow: '0 0 12px var(--teal-glow)' } : {}}>
-            <div className="option-row-bar" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${COLORS_HEX[i%COLORS_HEX.length]}22, ${COLORS_HEX[i%COLORS_HEX.length]}11)` }} />
+            <div className="option-row-bar" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${COLORS_HEX[i%COLORS_HEX.length]}22, ${COLORS_HEX[i%COLORS_HEX.length]}11` }} />
             <div className="option-row-content">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {isTop && <span style={{ fontSize: 18 }}>🏆</span>}
@@ -407,8 +407,7 @@ function Polling() {
 
   return (
     <>
-      {/* ── QR MODAL ── */}
-      <QRModal                                                           // ← NEW
+      <QRModal
         open={qrOpen}
         onClose={() => setQrOpen(false)}
         value={joinUrl(liveCode ?? '')}
@@ -564,6 +563,198 @@ function Polling() {
         </div>
       )}
     </>
+  )
+}
+
+// ── StudentView (untuk halaman partisipan) ───────────────────────────
+export function StudentView({ code }) {
+  const [status, setStatus]   = useState('loading')
+  const [session, setSession] = useState(null)
+  const [picked, setPicked]   = useState(null)
+  const [errMsg, setErrMsg]   = useState('')
+
+  useEffect(() => {
+    if (hasSubmitted(code)) { setStatus('done'); return }
+
+    getRoom(code)
+      .then(data => {
+        if (!data || !data.active || data.phase === 'closed') {
+          setStatus('error')
+        } else {
+          setSession(data)
+          setStatus('input')
+        }
+      })
+      .catch(() => setStatus('error'))
+  }, [code])
+
+  const submit = async () => {
+    if (picked === null) return
+    setErrMsg('')
+    setStatus('submitting')
+    try {
+      await submitVote(code, picked)
+      markSubmitted(code)
+      setStatus('done')
+    } catch {
+      setErrMsg('Gagal mengirim — periksa koneksi dan coba lagi.')
+      setStatus('input')
+    }
+  }
+
+  const options = session?.options
+    ? Object.values(session.options)
+    : []
+
+  const COLORS_HEX = ['#00c8e0','#ffc847','#a78bfa','#fb923c','#34d399','#f472b6']
+
+  const Wrap = ({ children }) => (
+    <div style={{
+      minHeight: '100vh', background: 'var(--bg)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '28px 18px', fontFamily: 'var(--font-b)',
+    }}>
+      <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <div style={{ fontSize: 36, marginBottom: 6 }}>🐟</div>
+        <div style={{ fontFamily: 'var(--font-h)', fontWeight: 800, fontSize: 20, color: 'var(--teal)' }}>
+          AquaTeach
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+          Kode Sesi:&ensp;
+          <span style={{ fontWeight: 700, color: 'var(--white)', fontFamily: 'monospace', fontSize: 15, letterSpacing: 2 }}>
+            {code}
+          </span>
+        </div>
+      </div>
+      <div style={{ width: '100%', maxWidth: 460 }}>{children}</div>
+    </div>
+  )
+
+  if (status === 'loading') return (
+    <Wrap>
+      <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>
+        <div className="spinner" style={{ width: 32, height: 32, margin: '0 auto 16px' }} />
+        Memuat polling...
+      </div>
+    </Wrap>
+  )
+
+  if (status === 'error') return (
+    <Wrap>
+      <div style={{
+        textAlign: 'center', padding: '40px 24px',
+        background: 'var(--card)', borderRadius: 'var(--r)',
+        border: '1px solid rgba(240,101,101,0.3)',
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>❌</div>
+        <div style={{ fontFamily: 'var(--font-h)', fontWeight: 700, color: 'var(--danger)', marginBottom: 8 }}>
+          Sesi tidak ditemukan
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
+          Kode <b style={{ color: 'var(--white)' }}>{code}</b> tidak valid atau sesi sudah berakhir.
+        </div>
+      </div>
+    </Wrap>
+  )
+
+  if (status === 'done') return (
+    <Wrap>
+      <div style={{
+        textAlign: 'center', padding: '48px 24px',
+        background: 'var(--card)', borderRadius: 'var(--r)',
+        border: '1px solid rgba(79,201,126,0.3)',
+      }}>
+        <div style={{ fontSize: 56, marginBottom: 14 }}>✅</div>
+        <div style={{ fontFamily: 'var(--font-h)', fontSize: 22, fontWeight: 800, color: 'var(--success)', marginBottom: 10 }}>
+          Suara Terkirim!
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.7 }}>
+          Jawaban Anda sudah tercatat.<br />
+          Tunggu hasil polling di layar kelas.
+        </div>
+      </div>
+    </Wrap>
+  )
+
+  return (
+    <Wrap>
+      <div style={{
+        background: 'linear-gradient(135deg,rgba(0,200,224,0.12),rgba(0,200,224,0.03))',
+        border: '1px solid rgba(0,200,224,0.3)',
+        borderRadius: 'var(--r)', padding: '18px 20px', marginBottom: 16,
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 8 }}>
+          📊 Pertanyaan Polling
+        </div>
+        <div style={{ fontFamily: 'var(--font-h)', fontSize: 16, fontWeight: 700, lineHeight: 1.6, color: 'var(--white)' }}>
+          {session?.question}
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '18px 20px' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14 }}>
+          Pilih satu jawaban
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
+          {options.map((opt, i) => {
+            const hex = COLORS_HEX[i % COLORS_HEX.length]
+            const isSelected = picked === i
+            return (
+              <button
+                key={i}
+                onClick={() => setPicked(i)}
+                disabled={status === 'submitting'}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '14px 16px', borderRadius: 'var(--r-sm)',
+                  background: isSelected ? hex + '22' : 'var(--surface)',
+                  border: `2px solid ${isSelected ? hex : 'var(--border)'}`,
+                  color: 'var(--white)', cursor: 'pointer',
+                  transition: 'all 0.15s', textAlign: 'left',
+                  boxShadow: isSelected ? `0 0 12px ${hex}33` : 'none',
+                }}
+              >
+                <div style={{
+                  width: 32, height: 32, borderRadius: 6, flexShrink: 0,
+                  background: hex + '33', color: hex,
+                  fontFamily: 'var(--font-h)', fontWeight: 800, fontSize: 13,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {String.fromCharCode(65 + i)}
+                </div>
+                <span style={{ fontWeight: isSelected ? 700 : 400, fontSize: 14 }}>{opt}</span>
+                {isSelected && <span style={{ marginLeft: 'auto', color: hex, fontSize: 18 }}>✓</span>}
+              </button>
+            )
+          })}
+        </div>
+
+        {errMsg && (
+          <div style={{ fontSize: 13, color: 'var(--danger)', marginBottom: 14,
+            padding: '10px 14px', background: 'rgba(240,101,101,0.08)', borderRadius: 'var(--r-sm)' }}>
+            ⚠️ {errMsg}
+          </div>
+        )}
+
+        <button
+          onClick={submit}
+          disabled={picked === null || status === 'submitting'}
+          style={{
+            width: '100%', padding: '15px',
+            borderRadius: 'var(--r-sm)',
+            background: (picked !== null && status !== 'submitting') ? 'var(--teal)' : 'var(--surface)',
+            color: (picked !== null && status !== 'submitting') ? '#000d14' : 'var(--muted)',
+            border: '1px solid transparent',
+            fontFamily: 'var(--font-h)', fontWeight: 800, fontSize: 15,
+            cursor: (picked !== null && status !== 'submitting') ? 'pointer' : 'not-allowed',
+            transition: 'all 0.2s',
+          }}
+        >
+          {status === 'submitting' ? '⏳ Mengirim...' : '🗳️ Kirim Suara'}
+        </button>
+      </div>
+    </Wrap>
   )
 }
 
