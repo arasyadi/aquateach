@@ -13,6 +13,95 @@ const COLORS = ['var(--teal)', 'var(--gold)', '#a78bfa', '#34d399', '#fb923c', '
 const COLORS_HEX = ['#00c8e0', '#ffc847', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#60a5fa', '#fbbf24']
 
 // ──────────────────────────────────────────────────────────────
+// FIX: StudentWrap didefinisikan di LUAR StudentView
+// agar tidak di-remount setiap kali state berubah
+// ──────────────────────────────────────────────────────────────
+const StudentWrap = ({ code, children }) => (
+  <div style={{
+    minHeight: '100vh', background: 'var(--bg)',
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    padding: '28px 18px', fontFamily: 'var(--font-b)',
+  }}>
+    <div style={{ textAlign: 'center', marginBottom: 28 }}>
+      <div style={{ fontSize: 36, marginBottom: 6 }}>🐟</div>
+      <div style={{ fontFamily: 'var(--font-h)', fontWeight: 800, fontSize: 20, color: 'var(--teal)' }}>
+        AquaTeach
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+        Kode Sesi:&ensp;
+        <span style={{ fontWeight: 700, color: 'var(--white)', fontFamily: 'monospace', fontSize: 15, letterSpacing: 2 }}>
+          {code}
+        </span>
+      </div>
+    </div>
+    <div style={{ width: '100%', maxWidth: 460 }}>{children}</div>
+  </div>
+)
+
+// ──────────────────────────────────────────────────────────────
+// FIX: CloudChips didefinisikan di LUAR WordCloud
+// dependencies diterima via props
+// ──────────────────────────────────────────────────────────────
+const CloudChips = ({ sortedWords, rotations, maxFreq, big = false }) => (
+  <div style={{
+    display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center',
+    gap: big ? '14px 18px' : '8px 10px',
+    padding: big ? '32px' : '16px',
+    minHeight: big ? 260 : 130,
+  }}>
+    {sortedWords.length === 0 ? (
+      <div style={{ color: 'rgba(255,255,255,0.25)', textAlign: 'center' }}>
+        <div style={{ fontSize: big ? 56 : 38, marginBottom: 10, opacity: 0.4 }}>☁️</div>
+        <div style={{ fontSize: big ? 15 : 12 }}>Menunggu kata dari mahasiswa...</div>
+      </div>
+    ) : sortedWords.map(([word, freq], i) => {
+      const sz  = (big ? 20 : 15) + (freq / maxFreq) * (big ? 46 : 28)
+      const hex = COLORS_HEX[i % COLORS_HEX.length]
+      const rot = rotations[word] ?? 0
+      return (
+        <span key={word} style={{
+          fontSize: sz, fontFamily: 'var(--font-h)',
+          fontWeight: freq > 1 ? 800 : 600, color: '#fff',
+          background: hex + '2a', border: `1.5px solid ${hex}60`,
+          borderRadius: '10px',
+          padding: `${Math.round(sz * 0.22)}px ${Math.round(sz * 0.55)}px`,
+          transform: `rotate(${rot}deg)`, display: 'inline-block',
+          animation: 'pop 0.35s ease', lineHeight: 1.2,
+          backdropFilter: 'blur(4px)',
+          transition: 'font-size 0.5s cubic-bezier(.34,1.5,.64,1)',
+          cursor: 'default', userSelect: 'none',
+        }}>{word}</span>
+      )
+    })}
+  </div>
+)
+
+// ──────────────────────────────────────────────────────────────
+// FIX: CloudDisplay didefinisikan di LUAR WordCloud
+// dependencies diterima via props
+// ──────────────────────────────────────────────────────────────
+const CloudDisplay = ({ sortedWords, rotations, maxFreq }) => (
+  <div className="word-cloud-area">
+    {sortedWords.length === 0 ? (
+      <div style={{ color: 'var(--muted)', fontSize: 14, textAlign: 'center' }}>
+        <div style={{ fontSize: 40, marginBottom: 10 }}>☁️</div>
+        Belum ada kata
+      </div>
+    ) : sortedWords.map(([word, freq], i) => {
+      const size = 14 + (freq / maxFreq) * 32
+      return (
+        <span key={word} className="cloud-word" style={{
+          fontSize: size,
+          color: COLORS[i % COLORS.length],
+          transform: `rotate(${rotations[word] ?? 0}deg)`,
+        }}>{word}</span>
+      )
+    })}
+  </div>
+)
+
+// ──────────────────────────────────────────────────────────────
 // StudentView – untuk halaman partisipasi mahasiswa
 // ──────────────────────────────────────────────────────────────
 export function StudentView({ code }) {
@@ -53,40 +142,17 @@ export function StudentView({ code }) {
     }
   }
 
-  const Wrap = ({ children }) => (
-    <div style={{
-      minHeight: '100vh', background: 'var(--bg)',
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      padding: '28px 18px', fontFamily: 'var(--font-b)',
-    }}>
-      <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <div style={{ fontSize: 36, marginBottom: 6 }}>🐟</div>
-        <div style={{ fontFamily: 'var(--font-h)', fontWeight: 800, fontSize: 20, color: 'var(--teal)' }}>
-          AquaTeach
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-          Kode Sesi:&ensp;
-          <span style={{ fontWeight: 700, color: 'var(--white)', fontFamily: 'monospace', fontSize: 15, letterSpacing: 2 }}>
-            {code}
-          </span>
-        </div>
-      </div>
-      <div style={{ width: '100%', maxWidth: 460 }}>{children}</div>
-    </div>
-  )
-
   if (status === 'loading') return (
-    <Wrap>
+    <StudentWrap code={code}>
       <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>
         <div className="spinner" style={{ width: 32, height: 32, margin: '0 auto 16px' }} />
         Memuat sesi...
       </div>
-    </Wrap>
+    </StudentWrap>
   )
 
   if (status === 'error') return (
-    <Wrap>
+    <StudentWrap code={code}>
       <div style={{
         textAlign: 'center', padding: '40px 24px',
         background: 'var(--card)', borderRadius: 'var(--r)',
@@ -100,11 +166,11 @@ export function StudentView({ code }) {
           Kode <b style={{ color: 'var(--white)' }}>{code}</b> tidak valid atau sesi sudah berakhir.
         </div>
       </div>
-    </Wrap>
+    </StudentWrap>
   )
 
   if (status === 'done') return (
-    <Wrap>
+    <StudentWrap code={code}>
       <div style={{
         textAlign: 'center', padding: '48px 24px',
         background: 'var(--card)', borderRadius: 'var(--r)',
@@ -119,11 +185,11 @@ export function StudentView({ code }) {
           Lihat hasilnya di layar kelas!
         </div>
       </div>
-    </Wrap>
+    </StudentWrap>
   )
 
   return (
-    <Wrap>
+    <StudentWrap code={code}>
       {/* Prompt */}
       <div style={{
         background: 'linear-gradient(135deg,rgba(0,200,224,0.12),rgba(0,200,224,0.03))',
@@ -193,7 +259,7 @@ export function StudentView({ code }) {
           {status === 'submitting' ? '⏳ Mengirim...' : '☁️ Kirim Kata'}
         </button>
       </div>
-    </Wrap>
+    </StudentWrap>
   )
 }
 
@@ -242,10 +308,7 @@ function WordCloud() {
     return map
   }, [sortedWords])
 
-  const getSize      = (freq, big) => (big ? 18 : 14) + (freq / maxFreq) * (big ? 52 : 32)
-  const getChipSize  = (freq, big) => (big ? 20 : 15) + (freq / maxFreq) * (big ? 46 : 28)
-
-  const submitWords = () => {
+  const addWords = () => {
     const parsed = input.trim().split(/[,\s]+/).filter(w => w.length > 1).slice(0, maxWords)
     if (!parsed.length) return
     setWords([...words, ...parsed])
@@ -283,57 +346,6 @@ function WordCloud() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-
-  const CloudChips = ({ big = false }) => (
-    <div style={{
-      display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center',
-      gap: big ? '14px 18px' : '8px 10px',
-      padding: big ? '32px' : '16px',
-      minHeight: big ? 260 : 130,
-    }}>
-      {sortedWords.length === 0 ? (
-        <div style={{ color: 'rgba(255,255,255,0.25)', textAlign: 'center' }}>
-          <div style={{ fontSize: big ? 56 : 38, marginBottom: 10, opacity: 0.4 }}>☁️</div>
-          <div style={{ fontSize: big ? 15 : 12 }}>Menunggu kata dari mahasiswa...</div>
-        </div>
-      ) : sortedWords.map(([word, freq], i) => {
-        const sz  = getChipSize(freq, big)
-        const hex = COLORS_HEX[i % COLORS_HEX.length]
-        const rot = rotations[word] ?? 0
-        return (
-          <span key={word} style={{
-            fontSize: sz, fontFamily: 'var(--font-h)',
-            fontWeight: freq > 1 ? 800 : 600, color: '#fff',
-            background: hex + '2a', border: `1.5px solid ${hex}60`,
-            borderRadius: '10px',
-            padding: `${Math.round(sz * 0.22)}px ${Math.round(sz * 0.55)}px`,
-            transform: `rotate(${rot}deg)`, display: 'inline-block',
-            animation: 'pop 0.35s ease', lineHeight: 1.2,
-            backdropFilter: 'blur(4px)',
-            transition: 'font-size 0.5s cubic-bezier(.34,1.5,.64,1)',
-            cursor: 'default', userSelect: 'none',
-          }}>{word}</span>
-        )
-      })}
-    </div>
-  )
-
-  const CloudDisplay = () => (
-    <div className="word-cloud-area">
-      {sortedWords.length === 0 ? (
-        <div style={{ color: 'var(--muted)', fontSize: 14, textAlign: 'center' }}>
-          <div style={{ fontSize: 40, marginBottom: 10 }}>☁️</div>
-          Belum ada kata
-        </div>
-      ) : sortedWords.map(([word, freq], i) => (
-        <span key={word} className="cloud-word" style={{
-          fontSize: getSize(freq, false),
-          color: COLORS[i % COLORS.length],
-          transform: `rotate(${rotations[word] ?? 0}deg)`,
-        }}>{word}</span>
-      ))}
-    </div>
-  )
 
   /* ── SLIDO-STYLE LIVE PRESENTATION MODE ── */
   if (presentMode && liveCode) {
@@ -466,7 +478,7 @@ function WordCloud() {
               backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(0,200,224,0.03) 0%, transparent 60%)',
             }}>
               <div style={{ width: '100%', maxWidth: 900 }}>
-                <CloudChips big />
+                <CloudChips sortedWords={sortedWords} rotations={rotations} maxFreq={maxFreq} big />
               </div>
             </div>
           </div>
@@ -487,7 +499,7 @@ function WordCloud() {
           <div style={{ fontFamily: 'var(--font-h)', fontSize: 22, fontWeight: 700, color: 'var(--white)', marginBottom: 28, lineHeight: 1.4 }}>
             "{prompt}"
           </div>
-          <CloudDisplay />
+          <CloudDisplay sortedWords={sortedWords} rotations={rotations} maxFreq={maxFreq} />
           <div style={{ marginTop: 20, color: 'var(--muted)', fontSize: 13 }}>
             {displayWords.length} kata · {Object.keys(wordFreq).length} kata unik
           </div>
@@ -615,10 +627,10 @@ function WordCloud() {
                   <textarea value={input} onChange={e => setInput(e.target.value)}
                     placeholder={`Contoh: tangkap, laut, ikan (maks ${maxWords} kata)`}
                     rows={3}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitWords() } }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addWords() } }}
                   />
                   <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-                    <button className="btn btn-teal" onClick={submitWords} disabled={!input.trim()}>+ Tambah Kata</button>
+                    <button className="btn btn-teal" onClick={addWords} disabled={!input.trim()}>+ Tambah Kata</button>
                     <button className="btn btn-gold" onClick={() => setPhase('results')}>☁️ Tampilkan Cloud</button>
                   </div>
                 </>
@@ -627,7 +639,7 @@ function WordCloud() {
 
             <div>
               <div className="form-label mb-12">Preview Real-time</div>
-              <CloudDisplay />
+              <CloudDisplay sortedWords={sortedWords} rotations={rotations} maxFreq={maxFreq} />
             </div>
           </div>
 
@@ -663,7 +675,7 @@ function WordCloud() {
             <div style={{ fontFamily: 'var(--font-h)', fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
               "{prompt}"
             </div>
-            <CloudDisplay />
+            <CloudDisplay sortedWords={sortedWords} rotations={rotations} maxFreq={maxFreq} />
             <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <span className="badge badge-teal">{displayWords.length} total kata</span>
               <span className="badge badge-gold">{Object.keys(wordFreq).length} kata unik</span>
