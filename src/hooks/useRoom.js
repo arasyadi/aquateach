@@ -14,7 +14,7 @@ export function generateRoomCode() {
 
 /** URL untuk mahasiswa join room */
 export function joinUrl(code) {
-  return `${window.location.origin}/?join&room=${code}`
+  return `${window.location.origin}/?join=${code}`
 }
 
 /** URL QR code via Google Charts API (no package needed) */
