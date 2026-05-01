@@ -51,7 +51,31 @@ const PRESETS = [
 const fmtTime = (ts) =>
   new Date(ts).toLocaleTimeString('id', { hour: '2-digit', minute: '2-digit' })
 
-// flattenResponses imported from '../hooks/useRoom'
+// ── Shared student wrapper (moved outside to prevent focus loss) ─
+function StudentWrap({ code, children }) {
+  return (
+    <div style={{
+      minHeight: '100vh', background: 'var(--bg)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '28px 18px', fontFamily: 'var(--font-b)',
+    }}>
+      <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <div style={{ fontSize: 36, marginBottom: 6 }}>🐟</div>
+        <div style={{ fontFamily: 'var(--font-h)', fontWeight: 800, fontSize: 20, color: 'var(--teal)' }}>
+          AquaTeach
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+          Kode Sesi:&ensp;
+          <span style={{ fontWeight: 700, color: 'var(--white)', fontFamily: 'monospace', fontSize: 15, letterSpacing: 2 }}>
+            {code}
+          </span>
+        </div>
+      </div>
+      <div style={{ width: '100%', maxWidth: 460 }}>{children}</div>
+    </div>
+  )
+}
 
 // ================================================================
 // STUDENT JOIN VIEW — rendered by App.jsx when ?join=CODE found
@@ -93,41 +117,17 @@ export function StudentJoinView({ code }) {
     }
   }
 
-  // ── Shared wrapper ──────────────────────────────────────────────
-  const Wrap = ({ children }) => (
-    <div style={{
-      minHeight: '100vh', background: 'var(--bg)',
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      padding: '28px 18px', fontFamily: 'var(--font-b)',
-    }}>
-      <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <div style={{ fontSize: 36, marginBottom: 6 }}>🐟</div>
-        <div style={{ fontFamily: 'var(--font-h)', fontWeight: 800, fontSize: 20, color: 'var(--teal)' }}>
-          AquaTeach
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-          Kode Sesi:&ensp;
-          <span style={{ fontWeight: 700, color: 'var(--white)', fontFamily: 'monospace', fontSize: 15, letterSpacing: 2 }}>
-            {code}
-          </span>
-        </div>
-      </div>
-      <div style={{ width: '100%', maxWidth: 460 }}>{children}</div>
-    </div>
-  )
-
   if (status === 'loading') return (
-    <Wrap>
+    <StudentWrap code={code}>
       <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>
         <div className="spinner" style={{ width: 32, height: 32, margin: '0 auto 16px' }} />
         Memuat sesi...
       </div>
-    </Wrap>
+    </StudentWrap>
   )
 
   if (status === 'error') return (
-    <Wrap>
+    <StudentWrap code={code}>
       <div style={{
         textAlign: 'center', padding: '40px 24px',
         background: 'var(--card)', borderRadius: 'var(--r)',
@@ -142,11 +142,11 @@ export function StudentJoinView({ code }) {
           atau sesi sudah berakhir.
         </div>
       </div>
-    </Wrap>
+    </StudentWrap>
   )
 
   if (status === 'done') return (
-    <Wrap>
+    <StudentWrap code={code}>
       <div style={{
         textAlign: 'center', padding: '48px 24px',
         background: 'var(--card)', borderRadius: 'var(--r)',
@@ -173,12 +173,12 @@ export function StudentJoinView({ code }) {
           </div>
         )}
       </div>
-    </Wrap>
+    </StudentWrap>
   )
 
   // status === 'input' | 'submitting'
   return (
-    <Wrap>
+    <StudentWrap code={code}>
       {/* Question card */}
       <div style={{
         background: 'linear-gradient(135deg, rgba(167,139,250,0.13), rgba(167,139,250,0.03))',
@@ -271,7 +271,7 @@ export function StudentJoinView({ code }) {
           {status === 'submitting' ? '⏳ Mengirim...' : '🚀 Kirim Prediksi'}
         </button>
       </div>
-    </Wrap>
+    </StudentWrap>
   )
 }
 
