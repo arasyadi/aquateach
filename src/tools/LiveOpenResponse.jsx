@@ -1,14 +1,19 @@
 // ================================================================
 // src/tools/LiveOpenResponse.jsx
 // Mentimeter-style Live Open Response
-// – Presenter view: setup → live feed → reveal
-// – Student view: join via ?join=CODE, submit response live
+// – Presenter view : setup → live → reveal
+// – Student view   : join via ?join=CODE, submit response live
+// Structure follows WordCloud.jsx pattern
 // ================================================================
 
-import { useState, useEffect, useRef } from 'react'
-import { FB_URL, fbGet, fbPut, fbPost, fbPatch, fbListen } from '../firebase'
-
-const IS_FB_CONFIGURED = !FB_URL.includes('YOUR_PROJECT_ID')
+import { useState, useEffect, useMemo } from 'react'
+import {
+  generateRoomCode, joinUrl,
+  createRoom, closeRoom,
+  useListenRoom,
+} from '../hooks/useRoom'
+import { fbGet, fbPost } from '../firebase'
+import QRModal, { QRClickable } from '../components/QRModal'
 
 // ── Constants ────────────────────────────────────────────────────
 
@@ -42,32 +47,32 @@ const PRESETS = [
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-const genCode = () => {
-  // 6-char uppercase code, exclude ambiguous chars (0/O, 1/I)
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-}
-
-const qrUrl = (text, size = 190) =>
-  `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}&bgcolor=0f1e35&color=00c8e0&qzone=2&margin=0`
-
 const fmtTime = (ts) =>
   new Date(ts).toLocaleTimeString('id', { hour: '2-digit', minute: '2-digit' })
+
+/** Flatten roomData.responses object → sorted array (newest first) */
+function flattenResponses(roomData) {
+  if (!roomData?.responses) return []
+  return Object.entries(roomData.responses)
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => b.time - a.time)
+}
 
 // ================================================================
 // STUDENT JOIN VIEW — rendered by App.jsx when ?join=CODE found
 // ================================================================
 export function StudentJoinView({ code }) {
-  const [status, setStatus]   = useState('loading') // loading | input | submitting | done | error
+  const [status, setStatus] = useState('loading') // loading | input | submitting | done | error
   const [session, setSession] = useState(null)
   const [name, setName]       = useState('')
   const [text, setText]       = useState('')
   const [errMsg, setErrMsg]   = useState('')
 
   useEffect(() => {
-    fbGet(`sessions/${code}`)
+    // Path must match createRoom's storage path inside useRoom
+    fbGet(`rooms/${code}`)
       .then((data) => {
-        if (!data || !data.question || data.phase === 'closed') {
+        if (!data || !data.question || data.status === 'closed') {
           setStatus('error')
         } else {
           setSession(data)
@@ -82,7 +87,7 @@ export function StudentJoinView({ code }) {
     setErrMsg('')
     setStatus('submitting')
     try {
-      await fbPost(`sessions/${code}/responses`, {
+      await fbPost(`rooms/${code}/responses`, {
         name: name.trim() || 'Anonim',
         text: text.trim(),
         time: Date.now(),
@@ -94,7 +99,7 @@ export function StudentJoinView({ code }) {
     }
   }
 
-  // ── Shared wrapper ──
+  // ── Shared wrapper ──────────────────────────────────────────────
   const Wrap = ({ children }) => (
     <div style={{
       minHeight: '100vh', background: 'var(--bg)',
@@ -102,7 +107,6 @@ export function StudentJoinView({ code }) {
       alignItems: 'center', justifyContent: 'center',
       padding: '28px 18px', fontFamily: 'var(--font-b)',
     }}>
-      {/* Branding */}
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
         <div style={{ fontSize: 36, marginBottom: 6 }}>🐟</div>
         <div style={{ fontFamily: 'var(--font-h)', fontWeight: 800, fontSize: 20, color: 'var(--teal)' }}>
@@ -197,7 +201,7 @@ export function StudentJoinView({ code }) {
           fontFamily: 'var(--font-h)', fontSize: 17, fontWeight: 700,
           lineHeight: 1.6, color: 'var(--white)',
         }}>
-          {session.question}
+          {session?.question}
         </div>
       </div>
 
@@ -283,17 +287,14 @@ export function StudentJoinView({ code }) {
 function ResponseCard({ response, index, big = false }) {
   const col = CARD_COLORS[index % CARD_COLORS.length]
   return (
-    <div
-      style={{
-        background: col.bg,
-        border: `1px solid ${col.border}`,
-        borderLeft: `3px solid ${col.accent}`,
-        borderRadius: 'var(--r-sm)',
-        padding: big ? '16px 20px' : '12px 16px',
-        animation: response.isNew ? 'slideInDown 0.45s cubic-bezier(0.22,1,0.36,1)' : 'none',
-        transition: 'box-shadow 0.2s',
-      }}
-    >
+    <div style={{
+      background: col.bg,
+      border: `1px solid ${col.border}`,
+      borderLeft: `3px solid ${col.accent}`,
+      borderRadius: 'var(--r-sm)',
+      padding: big ? '16px 20px' : '12px 16px',
+      transition: 'box-shadow 0.2s',
+    }}>
       <div style={{
         fontSize: 11, fontWeight: 700, color: col.accent,
         marginBottom: 7, display: 'flex', alignItems: 'center', gap: 6,
@@ -313,256 +314,306 @@ function ResponseCard({ response, index, big = false }) {
 }
 
 // ================================================================
-// PRESENT MODE OVERLAY
-// ================================================================
-function PresentOverlay({ phase, question, sessionCode, joinUrl, responses, reveal, comparePrompt, onClose }) {
-  return (
-    <div className="present-mode">
-      <button className="btn btn-outline btn-sm present-close" onClick={onClose}>✕ Tutup</button>
-
-      <div style={{ maxWidth: 1000, margin: '0 auto', width: '100%', padding: '28px 16px' }}>
-        {/* Tool label + code */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 14,
-          fontFamily: 'var(--font-h)', marginBottom: 22,
-        }}>
-          <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--teal)' }}>🔮 Live Open Response</span>
-          {sessionCode && (
-            <span style={{
-              padding: '4px 14px', background: 'rgba(0,200,224,0.12)',
-              border: '1px solid rgba(0,200,224,0.3)', borderRadius: 20,
-              fontSize: 13, fontWeight: 700, color: 'var(--teal)', letterSpacing: 2,
-              fontFamily: 'monospace',
-            }}>
-              {sessionCode}
-            </span>
-          )}
-          <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--muted)' }}>
-            {responses.length} respons
-          </span>
-        </div>
-
-        {/* Question */}
-        <div style={{
-          fontFamily: 'var(--font-h)', fontSize: 22, fontWeight: 700, lineHeight: 1.5,
-          background: 'var(--card)', borderRadius: 'var(--r)', padding: '22px 28px',
-          border: '1px solid var(--border)', marginBottom: 28,
-        }}>
-          {question}
-        </div>
-
-        {/* LIVE phase */}
-        {phase === 'live' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '230px 1fr', gap: 28, alignItems: 'start' }}>
-            {/* QR panel */}
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                padding: 10, background: 'var(--card)', borderRadius: 'var(--r)',
-                border: '1px solid var(--border)', display: 'inline-block', marginBottom: 12,
-              }}>
-                <img src={qrUrl(joinUrl, 190)} alt="QR Code" width={190} height={190}
-                  style={{ display: 'block', borderRadius: 4 }} />
-              </div>
-              <div style={{
-                fontFamily: 'var(--font-h)', fontSize: 30, fontWeight: 800,
-                letterSpacing: '6px', color: 'var(--teal)', marginBottom: 6,
-              }}>
-                {sessionCode}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Scan atau ketik kode</div>
-              <div style={{
-                marginTop: 16, padding: '10px 14px',
-                background: 'var(--surface)', borderRadius: 'var(--r-sm)',
-                border: '1px solid var(--border)', display: 'inline-flex',
-                alignItems: 'center', gap: 8,
-              }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: 'var(--success)',
-                  boxShadow: '0 0 8px var(--success)',
-                  animation: 'pulse 1.5s ease infinite',
-                }} />
-                <span style={{ fontFamily: 'var(--font-h)', fontWeight: 700, fontSize: 18 }}>
-                  {responses.length}
-                </span>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>respons</span>
-              </div>
-            </div>
-
-            {/* Live feed */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 480, overflowY: 'auto' }}>
-              {responses.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontSize: 14 }}>
-                  <div style={{ fontSize: 36, marginBottom: 10 }}>📡</div>
-                  Menunggu respons pertama...
-                </div>
-              ) : (
-                responses.map((r, i) => <ResponseCard key={r.id} response={r} index={i} big />)
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* REVEAL phase */}
-        {phase === 'reveal' && (
-          <div>
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(0,200,224,0.12), rgba(0,200,224,0.02))',
-              border: '1px solid rgba(0,200,224,0.3)',
-              borderRadius: 'var(--r)', padding: '22px 28px', marginBottom: 24,
-            }}>
-              <div style={{ fontWeight: 700, color: 'var(--teal)', marginBottom: 12, fontSize: 16 }}>
-                💡 Penjelasan Ilmiah
-              </div>
-              <div style={{ fontSize: 16, lineHeight: 1.85 }}>{reveal}</div>
-              {comparePrompt && (
-                <>
-                  <div style={{ borderTop: '1px solid var(--border)', margin: '18px 0' }} />
-                  <div style={{ fontWeight: 700, color: 'var(--gold)', marginBottom: 8, fontSize: 13 }}>
-                    🔄 Refleksi & Perbandingan
-                  </div>
-                  <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.7 }}>{comparePrompt}</div>
-                </>
-              )}
-            </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: 12,
-            }}>
-              {responses.map((r, i) => <ResponseCard key={r.id} response={r} index={i} />)}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ================================================================
 // MAIN PRESENTER COMPONENT (default export)
+// Structure follows WordCloud.jsx
 // ================================================================
 function LiveOpenResponse() {
-  const [phase, setPhase]           = useState('setup') // setup | live | reveal
-  const [question, setQuestion]     = useState('')
-  const [reveal, setReveal]         = useState('')
+  const [phase, setPhase]         = useState('setup') // setup | live | reveal
+  const [question, setQuestion]   = useState('')
+  const [reveal, setReveal]       = useState('')
   const [comparePrompt, setCompare] = useState('')
-  const [sessionCode, setCode]      = useState('')
-  const [responses, setResponses]   = useState([])
-  const [presentMode, setPresent]   = useState(false)
-  const [copied, setCopied]         = useState(false)
-  const [fbReady, setFbReady] = useState(IS_FB_CONFIGURED)
-  const [starting, setStarting]     = useState(false)
+  const [presentMode, setPresentMode] = useState(false)
 
-  const listenerRef = useRef(null)
-  const seenIds     = useRef(new Set())
+  const [liveCode, setLiveCode]       = useState(null)
+  const [liveLoading, setLiveLoading] = useState(false)
+  const [copied, setCopied]           = useState(false)
+  const [liveClosed, setLiveClosed]   = useState(false)
+  const [qrOpen, setQrOpen]           = useState(false)
 
-  const joinUrl = sessionCode
-    ? `${window.location.origin}${window.location.pathname}?join=${sessionCode}`
-    : ''
+  const { data: roomData } = useListenRoom(liveCode)
 
+  const responses = useMemo(() => {
+    if (!liveCode || !roomData) return []
+    return flattenResponses(roomData)
+  }, [liveCode, roomData])
 
-  const stopListener = () => {
-    if (listenerRef.current) { listenerRef.current(); listenerRef.current = null }
-    seenIds.current.clear()
-  }
+  // ── Actions ────────────────────────────────────────────────────
 
-  const startSession = async () => {
+  const goLive = async () => {
     if (!question.trim() || !reveal.trim()) return
-    setStarting(true)
-    const code = genCode()
-    setCode(code)
-    setResponses([])
-    seenIds.current.clear()
+    setLiveLoading(true)
+    const code = generateRoomCode()
     try {
-      await fbPut(`sessions/${code}`, {
-        question:      question.trim(),
-        reveal:        reveal.trim(),
+      await createRoom(code, {
+        tool: 'liveresp',
+        question: question.trim(),
+        reveal: reveal.trim(),
         comparePrompt: comparePrompt.trim(),
-        phase:         'live',
-        createdAt:     Date.now(),
+        status: 'live',
       })
-
-      // Start real-time SSE listener on responses subtree
-      listenerRef.current = fbListen(`sessions/${code}/responses`, (path, data) => {
-        if (path === '/') {
-          // Initial full snapshot
-          if (data) {
-            const arr = Object.entries(data)
-              .map(([id, v]) => ({ id, ...v, isNew: false }))
-              .sort((a, b) => b.time - a.time)
-            arr.forEach(r => seenIds.current.add(r.id))
-            setResponses(arr)
-          }
-        } else if (data) {
-          // Single new child pushed
-          const id = path.replace('/', '')
-          if (!seenIds.current.has(id)) {
-            seenIds.current.add(id)
-            const entry = { id, ...data, isNew: true }
-            setResponses(prev => [entry, ...prev])
-            // Remove animation flag after 700ms
-            setTimeout(() => {
-              setResponses(prev => prev.map(r => r.id === id ? { ...r, isNew: false } : r))
-            }, 700)
-          }
-        }
-      })
-
+      setLiveCode(code)
+      setLiveClosed(false)
       setPhase('live')
-    } catch (err) {
-      console.error('Firebase error:', err)
-      setFbReady(false)
-    } finally {
-      setStarting(false)
+      setPresentMode(true)
+    } catch (e) {
+      alert('Gagal membuat sesi live. Cek konfigurasi Firebase.\n\n' + e.message)
     }
+    setLiveLoading(false)
   }
 
   const doReveal = async () => {
-    stopListener()
-    // Mark session as closed so no new submissions accepted
-    if (sessionCode) {
-      await fbPatch(`sessions/${sessionCode}`, { phase: 'closed' }).catch(() => {})
-    }
+    if (liveCode) await closeRoom(liveCode).catch(() => {})
+    setLiveClosed(true)
     setPhase('reveal')
   }
 
-  const resetSession = async () => {
-    stopListener()
-    if (sessionCode) {
-      // Clean up session data
-      await fbPatch(`sessions/${sessionCode}`, { phase: 'closed' }).catch(() => {})
-    }
+  const reset = () => {
     setPhase('setup')
-    setCode('')
-    setResponses([])
-    setPresent(false)
+    setQuestion('')
+    setReveal('')
+    setCompare('')
+    setLiveCode(null)
+    setLiveClosed(false)
+    setPresentMode(false)
   }
 
   const copyLink = () => {
-    navigator.clipboard.writeText(joinUrl)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500) })
+    navigator.clipboard.writeText(joinUrl(liveCode))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2500)
   }
 
-  useEffect(() => () => stopListener(), [])
+  // ── PRESENT MODE (fullscreen overlay — live & reveal phases) ────
+  if (presentMode && liveCode) {
+    return (
+      <>
+        <QRModal
+          open={qrOpen}
+          onClose={() => setQrOpen(false)}
+          value={joinUrl(liveCode)}
+          code={liveCode}
+          question={question}
+          totalVotes={responses.length}
+        />
 
-  // ── Render ──────────────────────────────────────────────────────
+        <div style={{
+          position: 'fixed', inset: 0, background: '#060d1a', zIndex: 1000,
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          fontFamily: 'var(--font-b)',
+        }}>
+          {/* ── Top bar ── */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '11px 22px', borderBottom: '1px solid rgba(167,139,250,0.15)',
+            flexShrink: 0, background: 'rgba(10,21,37,0.95)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>🔮</span>
+              <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: '#a78bfa', fontSize: 14 }}>
+                AquaTeach — Live Open Response
+              </span>
+              <span className="badge" style={{
+                background: 'rgba(167,139,250,0.12)', color: '#a78bfa',
+                border: '1px solid rgba(167,139,250,0.3)',
+                display: 'inline-flex', gap: 5, marginLeft: 6,
+              }}>
+                {phase === 'live' && <span className="phase-dot phase-dot-active" />}
+                {responses.length} respons
+              </span>
+              {liveClosed && (
+                <span className="badge" style={{
+                  background: 'rgba(248,113,113,0.15)', color: '#f87171',
+                  border: '1px solid rgba(248,113,113,0.3)', marginLeft: 4,
+                }}>
+                  🔒 Sesi Ditutup
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {phase === 'live' && (
+                <button className="btn btn-gold btn-sm" onClick={doReveal}
+                  disabled={responses.length === 0}>
+                  💡 Ungkap Penjelasan
+                </button>
+              )}
+              {phase === 'reveal' && (
+                <button className="btn btn-outline btn-sm" onClick={() => { setPresentMode(false) }}>
+                  📋 Lihat Hasil
+                </button>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={() => setPresentMode(false)}>
+                ✕ Keluar
+              </button>
+            </div>
+          </div>
+
+          {/* ── Body ── */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
+            {/* LEFT sidebar */}
+            <div style={{
+              width: 286, flexShrink: 0, background: 'rgba(9,18,34,0.97)',
+              borderRight: '1px solid rgba(167,139,250,0.1)',
+              display: 'flex', flexDirection: 'column',
+              padding: '24px 18px', gap: 18, overflowY: 'auto',
+            }}>
+              {/* Question */}
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 7 }}>
+                  Pertanyaan
+                </div>
+                <div style={{ fontFamily: 'var(--font-h)', fontSize: 13.5, fontWeight: 700, color: 'var(--white)', lineHeight: 1.55 }}>
+                  "{question}"
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid rgba(167,139,250,0.1)' }} />
+
+              {/* QR — clickable */}
+              {phase === 'live' && (
+                <>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 10 }}>
+                      Scan untuk bergabung
+                    </div>
+                    <QRClickable
+                      value={joinUrl(liveCode)}
+                      size={216}
+                      onClick={() => setQrOpen(true)}
+                    />
+                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 10 }}>
+                      Klik untuk perbesar
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 5 }}>
+                      Kode Sesi
+                    </div>
+                    <div style={{
+                      fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 30,
+                      letterSpacing: 8, color: '#a78bfa', lineHeight: 1,
+                      textShadow: '0 0 24px rgba(167,139,250,0.45)',
+                    }}>
+                      {liveCode}
+                    </div>
+                    <div style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 5, wordBreak: 'break-all', lineHeight: 1.4 }}>
+                      {joinUrl(liveCode)}
+                    </div>
+                    <button className="btn btn-outline btn-sm"
+                      style={{ marginTop: 9, width: '100%', fontSize: 12 }}
+                      onClick={copyLink}>
+                      {copied ? '✓ Tersalin!' : '📋 Salin Link'}
+                    </button>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid rgba(167,139,250,0.1)' }} />
+                </>
+              )}
+
+              {/* Response counter */}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{
+                  fontFamily: 'var(--font-h)', fontSize: 44, fontWeight: 900,
+                  color: '#a78bfa', lineHeight: 1,
+                  textShadow: '0 0 20px rgba(167,139,250,0.4)',
+                }}>
+                  {responses.length}
+                </div>
+                <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>
+                  {phase === 'live' ? 'respons masuk' : 'total respons'}
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT — Live feed or Reveal */}
+            <div style={{
+              flex: 1, padding: '28px 32px', overflowY: 'auto',
+              backgroundImage: 'radial-gradient(circle at 50% 30%, rgba(167,139,250,0.03) 0%, transparent 60%)',
+            }}>
+              {/* LIVE: scrolling response feed */}
+              {phase === 'live' && (
+                <>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 14 }}>
+                    Live Feed
+                  </div>
+                  {responses.length === 0 ? (
+                    <div style={{
+                      textAlign: 'center', padding: '72px 20px',
+                      background: 'rgba(167,139,250,0.04)',
+                      borderRadius: 'var(--r)', border: '1px dashed rgba(167,139,250,0.2)',
+                      color: 'var(--muted)',
+                    }}>
+                      <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.5 }}>📡</div>
+                      <div style={{ fontSize: 14, marginBottom: 6 }}>Menunggu respons mahasiswa...</div>
+                      <div style={{ fontSize: 11 }}>Minta mereka scan QR atau ketik kode di browser HP</div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {responses.map((r, i) => <ResponseCard key={r.id} response={r} index={i} big />)}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* REVEAL: scientific explanation + all cards */}
+              {phase === 'reveal' && (
+                <>
+                  <div className="card mb-16" style={{
+                    background: 'linear-gradient(135deg, rgba(0,200,224,0.1), rgba(0,200,224,0.02))',
+                    borderColor: 'rgba(0,200,224,0.3)',
+                  }}>
+                    <div style={{ fontWeight: 700, color: 'var(--teal)', marginBottom: 12, fontSize: 15 }}>
+                      💡 Penjelasan Ilmiah
+                    </div>
+                    <div style={{ fontSize: 14, lineHeight: 1.85, marginBottom: comparePrompt ? 20 : 0 }}>
+                      {reveal}
+                    </div>
+                    {comparePrompt && (
+                      <>
+                        <div className="divider" />
+                        <div style={{ fontWeight: 700, color: 'var(--gold)', marginBottom: 8, fontSize: 13 }}>
+                          🔄 Refleksi & Perbandingan
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.7 }}>
+                          {comparePrompt}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 12 }}>
+                    Semua Respons Mahasiswa ({responses.length})
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                    gap: 10,
+                  }}>
+                    {responses.map((r, i) => <ResponseCard key={r.id} response={r} index={i} big />)}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // ── NORMAL UI ────────────────────────────────────────────────────
   return (
     <>
-      {presentMode && (
-        <PresentOverlay
-          phase={phase}
-          question={question}
-          sessionCode={sessionCode}
-          joinUrl={joinUrl}
-          responses={responses}
-          reveal={reveal}
-          comparePrompt={comparePrompt}
-          onClose={() => setPresent(false)}
-        />
-      )}
+      <QRModal
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        value={joinUrl(liveCode ?? '')}
+        code={liveCode}
+        question={question}
+        totalVotes={responses.length}
+      />
 
-      {/* Header */}
       <div className="page-hdr">
         <div className="page-hdr-top">
           <div className="page-hdr-icon">🔮</div>
@@ -573,11 +624,10 @@ function LiveOpenResponse() {
         </div>
       </div>
 
-      {/* ── SETUP ── */}
+      {/* ── SETUP ─────────────────────────────────────────────────── */}
       {phase === 'setup' && (
         <div className="anim-fade-up">
-          {!fbReady && <FirebaseWarning />}
-
+          {/* Preset picker */}
           <div className="card mb-16">
             <div className="form-label mb-12">Contoh Pertanyaan MSP</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -590,48 +640,87 @@ function LiveOpenResponse() {
             </div>
           </div>
 
+          {/* Form */}
           <div className="card mb-16">
             <div className="form-group">
               <label className="form-label">Pertanyaan Prediksi</label>
               <textarea value={question} onChange={e => setQuestion(e.target.value)}
-                placeholder="Apa yang akan terjadi jika... / Menurut Anda, bagaimana..." rows={3} />
+                placeholder="Apa yang akan terjadi jika... / Menurut Anda, bagaimana..."
+                rows={3} />
             </div>
             <div className="form-group">
-              <label className="form-label">Penjelasan Ilmiah
+              <label className="form-label">
+                Penjelasan Ilmiah
                 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 11, marginLeft: 6 }}>
                   (diungkap setelah semua mahasiswa submit)
                 </span>
               </label>
               <textarea value={reveal} onChange={e => setReveal(e.target.value)}
-                placeholder="Penjelasan ilmiah yang dibandingkan dengan prediksi mahasiswa..." rows={4} />
+                placeholder="Penjelasan ilmiah yang dibandingkan dengan prediksi mahasiswa..."
+                rows={4} />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Prompt Refleksi
-                <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 11, marginLeft: 6 }}>(opsional)</span>
+              <label className="form-label">
+                Prompt Refleksi
+                <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 11, marginLeft: 6 }}>
+                  (opsional)
+                </span>
               </label>
               <textarea value={comparePrompt} onChange={e => setCompare(e.target.value)}
-                placeholder="Pertanyaan untuk memandu mahasiswa membandingkan prediksi dengan kenyataan..." rows={2} />
+                placeholder="Pertanyaan untuk memandu mahasiswa membandingkan prediksi dengan kenyataan..."
+                rows={2} />
             </div>
           </div>
 
-          <button className="btn btn-teal btn-lg btn-block" onClick={startSession}
-            disabled={!question.trim() || !reveal.trim() || !fbReady || starting}>
-            {starting ? '⏳ Membuat sesi...' : '🚀 Mulai Sesi Live'}
+          <button
+            className="btn btn-lg btn-block"
+            style={{
+              background: 'linear-gradient(135deg,#a78bfa,#7c3aed)',
+              color: '#fff', border: 'none',
+              opacity: (!question.trim() || !reveal.trim() || liveLoading) ? 0.5 : 1,
+            }}
+            onClick={goLive}
+            disabled={!question.trim() || !reveal.trim() || liveLoading}>
+            {liveLoading ? '⏳ Membuat sesi...' : '🔴 Go Live'}
           </button>
         </div>
       )}
 
-      {/* ── LIVE ── */}
+      {/* ── LIVE (normal view behind present mode) ────────────────── */}
       {phase === 'live' && (
         <div className="anim-fade-up">
-          {/* Active question */}
+          {/* Live status bar */}
+          <div className="card mb-16" style={{ border: '1.5px solid rgba(167,139,250,0.35)', boxShadow: '0 0 20px rgba(167,139,250,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span className="phase-dot phase-dot-active" style={{ width: 10, height: 10 }} />
+                  <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: '#a78bfa', fontSize: 13 }}>
+                    LIVE AKTIF — {liveCode}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  {responses.length} respons masuk
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn btn-sm" style={{ background: 'linear-gradient(135deg,#a78bfa,#7c3aed)', color:'#fff', border:'none' }}
+                  onClick={() => setPresentMode(true)}>
+                  ⛶ Buka Presentasi Live
+                </button>
+                <button className="btn btn-gold btn-sm" onClick={doReveal} disabled={responses.length === 0}>
+                  💡 Ungkap Penjelasan
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Question display */}
           <div className="card mb-16" style={{
-            background: 'linear-gradient(135deg, rgba(167,139,250,0.12), rgba(167,139,250,0.03))',
+            background: 'linear-gradient(135deg, rgba(167,139,250,0.10), rgba(167,139,250,0.02))',
             borderColor: 'rgba(167,139,250,0.3)',
           }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 6px var(--success)', animation: 'pulse 1.5s ease infinite' }} />
               <span style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '1.5px' }}>
                 Sesi Aktif · {responses.length} respons masuk
@@ -646,52 +735,32 @@ function LiveOpenResponse() {
           <div style={{ display: 'grid', gridTemplateColumns: '264px 1fr', gap: 16, marginBottom: 16 }}>
             {/* Join panel */}
             <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: 'var(--muted)',
-                textTransform: 'uppercase', letterSpacing: '1px', alignSelf: 'flex-start',
-              }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', alignSelf: 'flex-start' }}>
                 Cara Bergabung
               </div>
-
-              {/* QR */}
-              <div style={{
-                padding: 8, background: 'var(--surface)',
-                borderRadius: 'var(--r-sm)', border: '1px solid var(--border)',
-              }}>
-                <img src={qrUrl(joinUrl)} alt="QR Code bergabung"
-                  width={190} height={190} style={{ display: 'block', borderRadius: 4 }} />
-              </div>
-
-              {/* Session code */}
+              <QRClickable
+                value={joinUrl(liveCode)}
+                size={190}
+                onClick={() => setQrOpen(true)}
+              />
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '1px' }}>
                   Kode Sesi
                 </div>
-                <div style={{
-                  fontFamily: 'var(--font-h)', fontSize: 30, fontWeight: 800,
-                  letterSpacing: '6px', color: 'var(--teal)',
-                }}>
-                  {sessionCode}
+                <div style={{ fontFamily: 'var(--font-h)', fontSize: 30, fontWeight: 800, letterSpacing: '6px', color: '#a78bfa' }}>
+                  {liveCode}
                 </div>
               </div>
-
-              {/* Copy link */}
               <button onClick={copyLink} className="btn btn-outline btn-sm btn-block" style={{ fontSize: 11 }}>
                 {copied ? '✅ Link disalin!' : '🔗 Salin Link Join'}
               </button>
-
-              {/* Live counter */}
               <div style={{
                 width: '100%', display: 'flex', alignItems: 'center',
                 justifyContent: 'center', gap: 8, padding: '10px 12px',
                 background: 'rgba(79,201,126,0.08)',
                 borderRadius: 'var(--r-sm)', border: '1px solid rgba(79,201,126,0.25)',
               }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: 'var(--success)', boxShadow: '0 0 6px var(--success)',
-                  animation: 'pulse 1.5s ease infinite',
-                }} />
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 6px var(--success)', animation: 'pulse 1.5s ease infinite' }} />
                 <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--white)', fontSize: 20 }}>
                   {responses.length}
                 </span>
@@ -701,17 +770,10 @@ function LiveOpenResponse() {
 
             {/* Live feed */}
             <div>
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: 'var(--muted)',
-                textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12,
-              }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>
                 Live Feed
               </div>
-
-              <div style={{
-                display: 'flex', flexDirection: 'column', gap: 8,
-                maxHeight: 400, overflowY: 'auto', paddingRight: 2,
-              }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto', paddingRight: 2 }}>
                 {responses.length === 0 ? (
                   <div style={{
                     textAlign: 'center', padding: '52px 20px',
@@ -729,24 +791,30 @@ function LiveOpenResponse() {
             </div>
           </div>
 
-          {/* Actions */}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-gold btn-lg" onClick={doReveal} disabled={responses.length === 0}>
               💡 Ungkap Penjelasan Ilmiah
             </button>
-            <button className="btn btn-teal" onClick={() => setPresent(true)}>
-              ⛶ Mode Presentasi
-            </button>
-            <button className="btn btn-ghost" onClick={resetSession}>
-              ✕ Akhiri Sesi
-            </button>
+            <button className="btn btn-ghost" onClick={reset}>✕ Akhiri Sesi</button>
           </div>
         </div>
       )}
 
-      {/* ── REVEAL ── */}
+      {/* ── REVEAL ───────────────────────────────────────────────── */}
       {phase === 'reveal' && (
         <div className="anim-fade-up">
+          {liveCode && (
+            <div className="card mb-16">
+              <span className="badge" style={{
+                background: 'rgba(248,113,113,0.15)', color: '#f87171',
+                border: '1px solid rgba(248,113,113,0.3)',
+                display: 'inline-flex', gap: 6,
+              }}>
+                🔒 Sesi Ditutup · {liveCode} · {responses.length} respons
+              </span>
+            </div>
+          )}
+
           <div className="card mb-16" style={{
             background: 'linear-gradient(135deg, rgba(0,200,224,0.1), rgba(0,200,224,0.02))',
             borderColor: 'rgba(0,200,224,0.3)',
@@ -768,10 +836,7 @@ function LiveOpenResponse() {
             )}
           </div>
 
-          <div style={{
-            fontSize: 10, fontWeight: 700, color: 'var(--muted)',
-            textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12,
-          }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>
             Semua Respons Mahasiswa ({responses.length})
           </div>
 
@@ -784,31 +849,15 @@ function LiveOpenResponse() {
           </div>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button className="btn btn-teal" onClick={() => setPresent(true)}>⛶ Mode Presentasi</button>
-            <button className="btn btn-ghost" onClick={resetSession}>🔄 Sesi Baru</button>
+            <button className="btn btn-sm" style={{ background: 'linear-gradient(135deg,#a78bfa,#7c3aed)', color:'#fff', border:'none' }}
+              onClick={() => setPresentMode(true)}>
+              ⛶ Mode Presentasi
+            </button>
+            <button className="btn btn-ghost" onClick={reset}>🔄 Sesi Baru</button>
           </div>
         </div>
       )}
     </>
-  )
-}
-
-// ── Firebase config warning ──────────────────────────────────────
-function FirebaseWarning() {
-  return (
-    <div style={{
-      background: 'rgba(240,101,101,0.08)', border: '1px solid rgba(240,101,101,0.3)',
-      borderRadius: 'var(--r)', padding: '14px 18px', marginBottom: 16, fontSize: 13,
-    }}>
-      <div style={{ fontWeight: 700, color: 'var(--danger)', marginBottom: 8 }}>
-        ⚠️ Firebase belum dikonfigurasi
-      </div>
-      <div style={{ color: 'var(--muted)', lineHeight: 1.7 }}>
-        Buka <code style={{ color: 'var(--white)' }}>src/firebase.js</code> dan ganti{' '}
-        <code style={{ color: 'var(--white)' }}>FB_URL</code> dengan Database URL project Firebase Anda.
-        Lalu set Database Rules agar <code style={{ color: 'var(--white)' }}>/sessions</code> bisa read &amp; write.
-      </div>
-    </div>
   )
 }
 
