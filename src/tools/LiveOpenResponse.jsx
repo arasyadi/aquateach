@@ -11,8 +11,9 @@ import {
   generateRoomCode, joinUrl,
   createRoom, closeRoom,
   useListenRoom,
+  getRoom, submitResponse,
+  flattenResponses,
 } from '../hooks/useRoom'
-import { fbGet, fbPost } from '../firebase'
 import QRModal, { QRClickable } from '../components/QRModal'
 
 // ── Constants ────────────────────────────────────────────────────
@@ -50,13 +51,7 @@ const PRESETS = [
 const fmtTime = (ts) =>
   new Date(ts).toLocaleTimeString('id', { hour: '2-digit', minute: '2-digit' })
 
-/** Flatten roomData.responses object → sorted array (newest first) */
-function flattenResponses(roomData) {
-  if (!roomData?.responses) return []
-  return Object.entries(roomData.responses)
-    .map(([id, v]) => ({ id, ...v }))
-    .sort((a, b) => b.time - a.time)
-}
+// flattenResponses imported from '../hooks/useRoom'
 
 // ================================================================
 // STUDENT JOIN VIEW — rendered by App.jsx when ?join=CODE found
@@ -69,10 +64,9 @@ export function StudentJoinView({ code }) {
   const [errMsg, setErrMsg]   = useState('')
 
   useEffect(() => {
-    // Path must match createRoom's storage path inside useRoom
-    fbGet(`rooms/${code}`)
+    getRoom(code)
       .then((data) => {
-        if (!data || !data.question || data.status === 'closed') {
+        if (!data || !data.question || !data.active || data.phase === 'closed') {
           setStatus('error')
         } else {
           setSession(data)
@@ -87,7 +81,7 @@ export function StudentJoinView({ code }) {
     setErrMsg('')
     setStatus('submitting')
     try {
-      await fbPost(`rooms/${code}/responses`, {
+      await submitResponse(code, {
         name: name.trim() || 'Anonim',
         text: text.trim(),
         time: Date.now(),
