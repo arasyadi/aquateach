@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ref, set, push, update, onValue, off } from 'firebase/database'
+import { ref, set, get, push, update, onValue, off } from 'firebase/database'
 import { db } from '../firebase'
 
 // ─── Kode Room ───────────────────────────────────────────────────────────────
@@ -49,6 +49,12 @@ export async function closeRoom(code) {
   })
 }
 
+/** Ambil data room sekali (one-time read, untuk student join view) */
+export async function getRoom(code) {
+  const snap = await get(ref(db, `rooms/${code}`))
+  return snap.exists() ? snap.val() : null
+}
+
 // ─── React Hook ──────────────────────────────────────────────────────────────
 
 /** Listen real-time ke data room. Returns { data, loading, error } */
@@ -91,6 +97,11 @@ export async function submitWords(code, words) {
   })
 }
 
+/** Mahasiswa submit response untuk LiveOpenResponse */
+export async function submitResponse(code, { name, text, time }) {
+  await push(ref(db, `rooms/${code}/responses`), { name, text, time })
+}
+
 /** Mahasiswa submit response untuk OpinionLine */
 export async function submitOpinion(code, side) {
   await push(ref(db, `rooms/${code}/opinions`), {
@@ -115,6 +126,14 @@ export function countVotes(roomData, optionCount) {
 export function flattenWords(roomData) {
   if (!roomData?.words) return []
   return Object.values(roomData.words).flatMap(v => v.words || [])
+}
+
+/** Flatten responses dari Firebase data → sorted array (newest first) */
+export function flattenResponses(roomData) {
+  if (!roomData?.responses) return []
+  return Object.entries(roomData.responses)
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => b.time - a.time)
 }
 
 /** Hitung opinions dari Firebase data */
