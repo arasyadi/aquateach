@@ -68,19 +68,16 @@ function JoinWrap({ children }) {
   )
 }
 
-// ── Student Router ────────────────────────────────────────────────
-// Reads room.tool from Firebase, then renders the correct student view.
-// Now uses realtime listener (useListenRoom) to react to session closure.
-function StudentRouter({ code }) {
-  const { data: roomData, loading } = useListenRoom(code)
-  const [newCode, setNewCode]       = useState('')
+// ── New Session Form (stabil di luar StudentRouter) ─────────────
+function NewSessionForm() {
+  const [newCode, setNewCode] = useState('')
 
   const goToNew = () => {
     const c = newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
     if (c.length >= 4) window.location.href = `/?join=${c}`
   }
 
-  const NewSessionForm = () => (
+  return (
     <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
       <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, textAlign: 'center' }}>
         Punya kode sesi baru?
@@ -108,6 +105,13 @@ function StudentRouter({ code }) {
       </div>
     </div>
   )
+}
+
+// ── Student Router ────────────────────────────────────────────────
+// Reads room.tool from Firebase, then renders the correct student view.
+// Now uses realtime listener (useListenRoom) to react to session closure.
+function StudentRouter({ code }) {
+  const { data: roomData, loading } = useListenRoom(code)
 
   // Loading awal
   if (loading && !roomData) return (
