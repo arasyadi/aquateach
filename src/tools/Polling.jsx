@@ -3,7 +3,7 @@ import {
   generateRoomCode, joinUrl,
   createRoom, closeRoom,
   useListenRoom, countVotes,
-  getRoom, submitVote,
+  submitVote,
   hasSubmitted, markSubmitted,
 } from '../hooks/useRoom'
 import { QRCodeSVG } from 'qrcode.react'
@@ -568,25 +568,17 @@ function Polling() {
 
 // ── StudentView (untuk halaman partisipan) ───────────────────────────
 export function StudentView({ code }) {
-  const [status, setStatus]   = useState('loading')
-  const [session, setSession] = useState(null)
+  const [status, setStatus]   = useState(hasSubmitted(code) ? 'done' : 'loading')
+  const { data: roomData, loading, error } = useListenRoom(code)
   const [picked, setPicked]   = useState(null)
   const [errMsg, setErrMsg]   = useState('')
 
   useEffect(() => {
-    if (hasSubmitted(code)) { setStatus('done'); return }
-
-    getRoom(code)
-      .then(data => {
-        if (!data || !data.active || data.phase === 'closed') {
-          setStatus('error')
-        } else {
-          setSession(data)
-          setStatus('input')
-        }
-      })
-      .catch(() => setStatus('error'))
-  }, [code])
+    if (loading || status === 'done') return
+    if (error || !roomData) { setStatus('error'); return }
+    if (!roomData.active || roomData.phase === 'closed') { setStatus('closed'); return }
+    if (status === 'loading') setStatus('input')
+  }, [loading, roomData, error, status])
 
   const submit = async () => {
     if (picked === null) return
@@ -602,8 +594,8 @@ export function StudentView({ code }) {
     }
   }
 
-  const options = session?.options
-    ? Object.values(session.options)
+  const options = roomData?.options
+    ? Object.values(roomData.options)
     : []
 
   const COLORS_HEX = ['#00c8e0','#ffc847','#a78bfa','#fb923c','#34d399','#f472b6']
@@ -658,6 +650,24 @@ export function StudentView({ code }) {
     </Wrap>
   )
 
+  if (status === 'closed') return (
+    <Wrap>
+      <div style={{
+        textAlign: 'center', padding: '40px 24px',
+        background: 'var(--card)', borderRadius: 'var(--r)',
+        border: '1px solid rgba(255,200,71,0.3)',
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
+        <div style={{ fontFamily: 'var(--font-h)', fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>
+          Sesi Telah Ditutup
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
+          Dosen sudah menutup polling ini.
+        </div>
+      </div>
+    </Wrap>
+  )
+
   if (status === 'done') return (
     <Wrap>
       <div style={{
@@ -688,7 +698,7 @@ export function StudentView({ code }) {
           📊 Pertanyaan Polling
         </div>
         <div style={{ fontFamily: 'var(--font-h)', fontSize: 16, fontWeight: 700, lineHeight: 1.6, color: 'var(--white)' }}>
-          {session?.question}
+          {roomData?.question}
         </div>
       </div>
 
