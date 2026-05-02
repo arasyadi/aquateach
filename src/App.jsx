@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getRoom } from './hooks/useRoom'
+import { useListenRoom } from './hooks/useRoom'
 import Home from './pages/Home'
 import Polling,          { StudentView as PollingStudent    } from './tools/Polling'
 import WordCloud,        { StudentView as WordCloudStudent  } from './tools/WordCloud'
@@ -70,25 +70,47 @@ function JoinWrap({ children }) {
 
 // ── Student Router ────────────────────────────────────────────────
 // Reads room.tool from Firebase, then renders the correct student view.
+// Now uses realtime listener (useListenRoom) to react to session closure.
 function StudentRouter({ code }) {
-  const [status, setStatus] = useState('loading') // loading | ready | error
-  const [tool, setTool]     = useState(null)
+  const { data: roomData, loading } = useListenRoom(code)
+  const [newCode, setNewCode]       = useState('')
 
-  useEffect(() => {
-    getRoom(code)
-      .then(data => {
-        if (!data || !data.active || data.phase === 'closed') {
-          setStatus('error')
-        } else {
-          setTool(data.tool ?? null)
-          setStatus('ready')
-        }
-      })
-      .catch(() => setStatus('error'))
-  }, [code])
+  const goToNew = () => {
+    const c = newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (c.length >= 4) window.location.href = `/?join=${c}`
+  }
 
-  // ── Loading ──
-  if (status === 'loading') return (
+  const NewSessionForm = () => (
+    <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, textAlign: 'center' }}>
+        Punya kode sesi baru?
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          type="text"
+          value={newCode}
+          onChange={e => setNewCode(e.target.value.toUpperCase())}
+          onKeyDown={e => e.key === 'Enter' && goToNew()}
+          placeholder="Kode sesi"
+          maxLength={8}
+          style={{
+            flex: 1, fontSize: 18, fontFamily: 'var(--font-h)',
+            letterSpacing: 4, textAlign: 'center', fontWeight: 700,
+          }}
+        />
+        <button
+          className="btn btn-teal"
+          onClick={goToNew}
+          disabled={newCode.trim().length < 4}
+        >
+          Masuk →
+        </button>
+      </div>
+    </div>
+  )
+
+  // Loading awal
+  if (loading && !roomData) return (
     <JoinWrap>
       <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>
         <div className="spinner" style={{ width: 32, height: 32, margin: '0 auto 16px' }} />
@@ -97,44 +119,63 @@ function StudentRouter({ code }) {
     </JoinWrap>
   )
 
-  // ── Error / room not found ──
-  if (status === 'error') return (
+  // Room tidak ditemukan
+  if (!roomData) return (
     <JoinWrap>
       <div style={{
-        textAlign: 'center', padding: '40px 24px',
-        background: 'var(--card)', borderRadius: 'var(--r)',
-        border: '1px solid rgba(240,101,101,0.3)',
+        padding: '40px 24px', background: 'var(--card)',
+        borderRadius: 'var(--r)', border: '1px solid rgba(240,101,101,0.3)',
+        textAlign: 'center',
       }}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>❌</div>
         <div style={{ fontFamily: 'var(--font-h)', fontWeight: 700, color: 'var(--danger)', marginBottom: 8 }}>
           Sesi tidak ditemukan
         </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
-          Kode <b style={{ color: 'var(--white)' }}>{code}</b> tidak valid
-          atau sesi sudah berakhir.
+          Kode <b style={{ color: 'var(--white)' }}>{code}</b> tidak valid atau sesi sudah berakhir.
         </div>
+        <NewSessionForm />
       </div>
     </JoinWrap>
   )
 
-  // ── Route ke student view yang tepat ──
-  const StudentView = STUDENT_VIEWS[tool]
+  // Room ditutup — REAKTIF: otomatis tampil saat dosen klik tutup
+  if (!roomData.active || roomData.phase === 'closed') return (
+    <JoinWrap>
+      <div style={{
+        padding: '40px 24px', background: 'var(--card)',
+        borderRadius: 'var(--r)', border: '1px solid rgba(255,200,71,0.3)',
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
+        <div style={{ fontFamily: 'var(--font-h)', fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>
+          Sesi Telah Ditutup
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
+          Dosen sudah menutup sesi ini.
+        </div>
+        <NewSessionForm />
+      </div>
+    </JoinWrap>
+  )
 
+  // Tool tidak dikenal
+  const StudentView = STUDENT_VIEWS[roomData.tool]
   if (!StudentView) return (
     <JoinWrap>
       <div style={{
-        textAlign: 'center', padding: '40px 24px',
-        background: 'var(--card)', borderRadius: 'var(--r)',
-        border: '1px solid rgba(255,200,71,0.3)',
+        padding: '40px 24px', background: 'var(--card)',
+        borderRadius: 'var(--r)', border: '1px solid rgba(255,200,71,0.3)',
+        textAlign: 'center',
       }}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>🔧</div>
         <div style={{ fontFamily: 'var(--font-h)', fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>
           Tool tidak dikenal
         </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
-          Tipe sesi <b style={{ color: 'var(--white)' }}>{tool ?? 'unknown'}</b> belum mendukung
-          student join view.
+          Tipe sesi <b style={{ color: 'var(--white)' }}>{roomData.tool ?? 'unknown'}</b> belum mendukung student join view.
         </div>
+        <NewSessionForm />
       </div>
     </JoinWrap>
   )
