@@ -142,11 +142,110 @@ function StudentRouter({ code }) {
   return <StudentView code={code} />
 }
 
+// ── PIN Gate ──────────────────────────────────────────────────────────────
+const STORED_KEY = 'aquateach_auth'
+const PIN_HASH   = import.meta.env.VITE_PIN_HASH || ''
+
+async function hashPin(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin))
+  return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, '0')).join('')
+}
+
+function PinGate({ onAuth }) {
+  const [pin, setPin]       = useState('')
+  const [error, setError]   = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const attempt = async () => {
+    if (!pin.trim()) return
+    setLoading(true)
+    const h = await hashPin(pin)
+    if (h === PIN_HASH) {
+      localStorage.setItem(STORED_KEY, h)
+      onAuth()
+    } else {
+      setError(true)
+      setPin('')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div style={{
+      minHeight: '100vh', background: 'var(--bg)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '24px', fontFamily: 'var(--font-b)',
+    }}>
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
+        <div style={{ fontSize: 48, marginBottom: 10 }}>🐟</div>
+        <div style={{
+          fontFamily: 'var(--font-h)', fontWeight: 900,
+          fontSize: 28, color: 'var(--teal)', letterSpacing: '-0.5px',
+        }}>AquaTeach</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+          MSP — FKP Universitas Udayana
+        </div>
+      </div>
+
+      <div style={{
+        width: '100%', maxWidth: 340,
+        background: 'var(--card)', border: '1px solid var(--border)',
+        borderRadius: 'var(--r)', padding: '28px 24px',
+      }}>
+        <div style={{
+          fontFamily: 'var(--font-h)', fontWeight: 700,
+          fontSize: 15, color: 'var(--white)', marginBottom: 4,
+        }}>
+          🔐 Akses Dosen
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 20 }}>
+          Masukkan PIN untuk melanjutkan
+        </div>
+
+        <input
+          type="password"
+          value={pin}
+          onChange={e => { setPin(e.target.value); setError(false) }}
+          onKeyDown={e => e.key === 'Enter' && attempt()}
+          placeholder="PIN"
+          autoFocus
+          style={{
+            width: '100%', marginBottom: 12, fontSize: 22,
+            letterSpacing: 8, textAlign: 'center', fontFamily: 'var(--font-h)',
+            borderColor: error ? 'var(--danger)' : undefined,
+          }}
+        />
+
+        {error && (
+          <div style={{
+            fontSize: 12, color: 'var(--danger)', marginBottom: 12,
+            textAlign: 'center', animation: 'shake 0.3s ease',
+          }}>
+            PIN salah, coba lagi.
+          </div>
+        )}
+
+        <button
+          className="btn btn-teal btn-block"
+          onClick={attempt}
+          disabled={!pin.trim() || loading}
+        >
+          {loading ? '⏳' : '🔓 Masuk'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Main App ──────────────────────────────────────────────────────
 function App() {
   const [page, setPage]             = useState('home')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [joinCode, setJoinCode]     = useState(null)
+  const [authed, setAuthed]         = useState(
+    !PIN_HASH || localStorage.getItem(STORED_KEY) === PIN_HASH
+  )
 
   // Detect ?join=CODE in URL → render student join view
   useEffect(() => {
@@ -158,6 +257,11 @@ function App() {
   // ── Student join route ──────────────────────────────────────────
   if (joinCode) {
     return <StudentRouter code={joinCode} />
+  }
+
+  // ── PIN Gate (hanya untuk dosen) ───────────────────────────────
+  if (!authed) {
+    return <PinGate onAuth={() => setAuthed(true)} />
   }
 
   // ── Normal presenter app ────────────────────────────────────────
@@ -195,6 +299,10 @@ function App() {
           <div style={{ fontWeight: 700, color: 'var(--white)', marginBottom: 4 }}>AquaTeach v1.2</div>
           <div>MSP FKP Univ. Udayana</div>
           <div>☕ Developed by: Andy Rasyadi</div>
+          <button className="btn btn-ghost btn-sm" style={{ marginTop: 8, width: '100%' }}
+            onClick={() => { localStorage.removeItem(STORED_KEY); setAuthed(false) }}>
+            🔒 Logout
+          </button>
         </div>
       </aside>
 
