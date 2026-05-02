@@ -184,7 +184,7 @@ function PinGate({ onAuth }) {
           fontSize: 28, color: 'var(--teal)', letterSpacing: '-0.5px',
         }}>AquaTeach</div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-          MSP — FKP Universitas Udayana
+          ☕ Developed by: Andy Rasyadi
         </div>
       </div>
 
