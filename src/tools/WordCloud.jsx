@@ -1,11 +1,3 @@
-Berikut kode `WordCloud.jsx` yang sudah dipatch sesuai saran terbaru. Perubahan yang dilakukan:
-
-1. Di fase `collecting` pada live status bar, tombol **⛶ Buka Presentasi Slido** dihapus, sehingga hanya tersisa tombol **🔒 Tutup Sesi** (atau badge **🔒 Ditutup**).
-2. Pada fungsi `goLive`, ditambahkan guard `if (liveCode) return` agar tidak membuat sesi ganda, dan logika `setLiveLoading(false)` dipindahkan ke blok `finally` agar selalu dijalankan.
-
-Silakan salin seluruh kode di bawah ini:
-
-```jsx
 import { useState, useEffect, useMemo } from 'react'
 import {
   generateRoomCode, joinUrl,
@@ -13,6 +5,7 @@ import {
   useListenRoom, flattenWords,
   getRoom, submitWords,
   hasSubmitted, markSubmitted,
+  withTimeout,
 } from '../hooks/useRoom'
 import { QRCodeSVG } from 'qrcode.react'
 import QRModal, { QRClickable } from '../components/QRModal'
@@ -357,17 +350,16 @@ function WordCloud() {
 
   // ───────── PATCH: guard + finally ─────────
   const goLive = async () => {
-    if (!prompt.trim()) return
-    if (liveCode) return                    // guard: jangan buat lagi jika sudah ada sesi
-    setLiveLoading(true)
-    const code = generateRoomCode()
-    try {
-      await createRoom(code, { tool: 'wordcloud', prompt, maxWords })
-      setLiveCode(code)
-      setLiveClosed(false)
-      setPhase('collecting')
-      setPresentMode(true)
-
+  if (!prompt.trim()) return
+  if (liveCode) return
+  setLiveLoading(true)
+  const code = generateRoomCode()
+  try {
+    await withTimeout(createRoom(code, { tool: 'wordcloud', prompt, maxWords }))  // ← ubah baris ini
+    setLiveCode(code)
+    setLiveClosed(false)
+    setPhase('collecting')
+    setPresentMode(true)
       // PATCH: simpan session ke localStorage
       localStorage.setItem('aqt_session', JSON.stringify({
         tool: 'wordcloud',
@@ -743,4 +735,3 @@ function WordCloud() {
 }
 
 export default WordCloud
-```
