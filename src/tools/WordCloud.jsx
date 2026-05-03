@@ -1,3 +1,11 @@
+Berikut kode `WordCloud.jsx` yang sudah dipatch sesuai saran terbaru. Perubahan yang dilakukan:
+
+1. Di fase `collecting` pada live status bar, tombol **⛶ Buka Presentasi Slido** dihapus, sehingga hanya tersisa tombol **🔒 Tutup Sesi** (atau badge **🔒 Ditutup**).
+2. Pada fungsi `goLive`, ditambahkan guard `if (liveCode) return` agar tidak membuat sesi ganda, dan logika `setLiveLoading(false)` dipindahkan ke blok `finally` agar selalu dijalankan.
+
+Silakan salin seluruh kode di bawah ini:
+
+```jsx
 import { useState, useEffect, useMemo } from 'react'
 import {
   generateRoomCode, joinUrl,
@@ -347,8 +355,10 @@ function WordCloud() {
     setLiveCode(null); setLiveClosed(false); setPresentMode(false)
   }
 
+  // ───────── PATCH: guard + finally ─────────
   const goLive = async () => {
     if (!prompt.trim()) return
+    if (liveCode) return                    // guard: jangan buat lagi jika sudah ada sesi
     setLiveLoading(true)
     const code = generateRoomCode()
     try {
@@ -368,8 +378,9 @@ function WordCloud() {
       }))
     } catch (e) {
       alert('Gagal membuat sesi live. Cek konfigurasi Firebase.\n\n' + e.message)
+    } finally {
+      setLiveLoading(false)                 // selalu dipanggil
     }
-    setLiveLoading(false)
   }
 
   const endLive = async () => {
@@ -624,8 +635,8 @@ function WordCloud() {
                     {displayWords.length} kata · {Object.keys(wordFreq).length} unik
                   </div>
                 </div>
+                {/* ───────── PATCH: hapus tombol Buka Presentasi Slido, hanya tutup sesi ───────── */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button className="btn btn-teal btn-sm" onClick={() => setPresentMode(true)}>⛶ Buka Presentasi Slido</button>
                   {!liveClosed
                     ? <button className="btn btn-gold btn-sm" onClick={endLive}>🔒 Tutup Sesi</button>
                     : <span className="badge" style={{ background:'rgba(248,113,113,0.15)', color:'#f87171', border:'1px solid rgba(248,113,113,0.3)', padding:'6px 12px' }}>🔒 Ditutup</span>
@@ -732,3 +743,4 @@ function WordCloud() {
 }
 
 export default WordCloud
+```
