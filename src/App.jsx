@@ -48,7 +48,7 @@ const COMPONENTS = {
   liveresp:      LiveOpenResponse,
 }
 
-// ── Shared join-page wrapper ──────────────────────────────────────
+// src/App.jsx — fungsi JoinWrap
 function JoinWrap({ children }) {
   return (
     <div style={{
@@ -64,6 +64,12 @@ function JoinWrap({ children }) {
         </div>
       </div>
       <div style={{ width: '100%', maxWidth: 460 }}>{children}</div>
+
+      {/* ── Credit footer ── */}
+      <div style={{ marginTop: 28, fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+        ☕ Developed by: Andy Rasyadi
+      </div>
+
     </div>
   )
 }
