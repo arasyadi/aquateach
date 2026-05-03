@@ -202,52 +202,134 @@ function OpinionLine() {
 
       {/* ── PRESENT MODE ── */}
       {presentMode && (
-        <div className="present-mode" style={{ alignItems: 'center', justifyContent: 'center' }}>
-          <button className="btn btn-outline btn-sm present-close" onClick={() => setPresentMode(false)}>
-            ✕ Tutup
-          </button>
-          <div style={{ maxWidth: 840, width: '100%', textAlign: 'center' }}>
-            <div style={{ fontFamily: 'var(--font-h)', fontSize: 28, fontWeight: 800, color: 'var(--teal)', marginBottom: 16 }}>
-              📍 Opinion Line
+        <div style={{
+          position: 'fixed', inset: 0, background: '#060d1a', zIndex: 1000,
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          fontFamily: 'var(--font-b)',
+        }}>
+          {/* Top bar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '11px 22px', borderBottom: '1px solid rgba(0,200,224,0.13)',
+            flexShrink: 0, background: 'rgba(10,21,37,0.95)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>📍</span>
+              <span style={{ fontFamily: 'var(--font-h)', fontWeight: 800, color: 'var(--teal)', fontSize: 14 }}>
+                AquaTeach — Opinion Line
+              </span>
+              {liveCode && (
+                <span className="badge badge-teal" style={{ display: 'inline-flex', gap: 5, marginLeft: 6 }}>
+                  <span className="phase-dot phase-dot-active" />
+                  {total} suara masuk
+                </span>
+              )}
             </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setPresentMode(false)}>
+              ✕ Tutup
+            </button>
+          </div>
 
+          {/* Body */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
+            {/* LEFT sidebar — hanya tampil saat live */}
             {liveCode && (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 28, marginBottom: 28, flexWrap: 'wrap' }}>
-                {/* QR in present mode — CLICKABLE */}
-                <QRClickable
-                  value={joinUrl(liveCode)}
-                  size={190}
-                  onClick={() => setQrOpen(true)}
-                />
-                <div style={{ textAlign: 'left' }}>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Kode Room</div>
-                  <div style={{ fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 34, letterSpacing: 7, color: 'var(--teal)', marginBottom: 10 }}>
-                    {liveCode}
+              <div style={{
+                width: 286, flexShrink: 0, background: 'rgba(9,18,34,0.97)',
+                borderRight: '1px solid rgba(0,200,224,0.1)',
+                display: 'flex', flexDirection: 'column',
+                padding: '24px 18px', gap: 18, overflowY: 'auto',
+              }}>
+                {/* Pernyataan */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 7 }}>
+                    Pernyataan
                   </div>
-                  <span className="badge badge-teal" style={{ display: 'inline-flex' }}>
-                    <span className="phase-dot phase-dot-active" /> {total} suara masuk
-                  </span>
+                  <div style={{ fontFamily: 'var(--font-h)', fontSize: 13.5, fontWeight: 700, color: 'var(--white)', lineHeight: 1.55 }}>
+                    "{statement}"
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
+
+                {/* QR */}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 10 }}>
+                    Scan untuk bergabung
+                  </div>
+                  <QRClickable
+                    value={joinUrl(liveCode)}
+                    size={216}
+                    onClick={() => setQrOpen(true)}
+                  />
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 10 }}>
+                    Klik untuk perbesar
+                  </div>
+                </div>
+
+                {/* Kode room */}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.8px', marginBottom: 5 }}>
+                    Kode Room
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-h)', fontWeight: 900, fontSize: 30, letterSpacing: 8,
+                    color: 'var(--teal)', lineHeight: 1, textShadow: '0 0 24px rgba(0,200,224,0.45)',
+                  }}>{liveCode}</div>
+                  <div style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 5, wordBreak: 'break-all', lineHeight: 1.4 }}>
+                    {joinUrl(liveCode)}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
+
+                {/* Counter */}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{
+                    fontFamily: 'var(--font-h)', fontSize: 44, fontWeight: 900,
+                    color: 'var(--teal)', lineHeight: 1, textShadow: '0 0 20px rgba(0,200,224,0.4)',
+                  }}>{total}</div>
+                  <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>suara masuk</div>
                 </div>
               </div>
             )}
 
+            {/* RIGHT — konten utama */}
             <div style={{
-              fontFamily: 'var(--font-h)', fontSize: 22, fontWeight: 700, lineHeight: 1.55,
-              marginBottom: 32, color: 'var(--white)',
-              background: 'var(--card)', borderRadius: 'var(--r)', padding: '24px',
-              border: '1px solid var(--border)',
+              flex: 1, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              padding: '40px 48px', overflowY: 'auto',
+              backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(0,200,224,0.03) 0%, transparent 60%)',
             }}>
-              "{statement}"
-            </div>
+              {/* Pernyataan — tampil di tengah saat tidak live */}
+              {!liveCode && (
+                <div style={{
+                  fontFamily: 'var(--font-h)', fontSize: 22, fontWeight: 700, lineHeight: 1.55,
+                  marginBottom: 40, color: 'var(--white)', textAlign: 'center',
+                  background: 'var(--card)', borderRadius: 'var(--r)', padding: '24px 32px',
+                  border: '1px solid var(--border)', maxWidth: 680, width: '100%',
+                }}>
+                  "{statement}"
+                </div>
+              )}
 
-            <ResultsView big />
-
-            {revealed && reveal.explanation && (
-              <div className="reveal-box mt-24" style={reveal.correct === 'tidak' ? { borderColor: 'rgba(240,101,101,0.3)' } : {}}>
-                <div style={{ fontWeight: 700, color: 'var(--teal)', marginBottom: 8 }}>💡 Penjelasan Dosen</div>
-                <div style={{ fontSize: 15, lineHeight: 1.7 }}>{reveal.explanation}</div>
+              {/* Hasil voting */}
+              <div style={{ width: '100%', maxWidth: 720 }}>
+                <ResultsView big />
               </div>
-            )}
+
+              {/* Penjelasan dosen */}
+              {revealed && reveal.explanation && (
+                <div className="reveal-box mt-24" style={{
+                  width: '100%', maxWidth: 720,
+                  ...(reveal.correct === 'tidak' ? { borderColor: 'rgba(240,101,101,0.3)' } : {}),
+                }}>
+                  <div style={{ fontWeight: 700, color: 'var(--teal)', marginBottom: 8 }}>💡 Penjelasan Dosen</div>
+                  <div style={{ fontSize: 15, lineHeight: 1.7 }}>{reveal.explanation}</div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
