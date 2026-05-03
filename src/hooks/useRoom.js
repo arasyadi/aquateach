@@ -146,6 +146,14 @@ export function countOpinions(roomData) {
   return counts
 }
 
+/** Wrap promise dengan timeout. Default 8 detik. */
+export function withTimeout(promise, ms = 8000) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Koneksi timeout — periksa jaringan dan konfigurasi Firebase')), ms)
+  )
+  return Promise.race([promise, timeout])
+}
+
 /** Cek localStorage apakah mahasiswa sudah submit di room ini */
 export function hasSubmitted(code) {
   return localStorage.getItem(`submitted_${code}`) === '1'
