@@ -308,6 +308,31 @@ function WordCloud() {
     return map
   }, [sortedWords])
 
+  // ───────── PATCH: Restore session ─────────
+  useEffect(() => {
+    const saved = localStorage.getItem('aqt_session')
+    if (!saved) return
+    try {
+      const s = JSON.parse(saved)
+      if (s.tool !== 'wordcloud') return
+      setLiveCode(s.liveCode)
+      setPhase(s.phase)
+      setPrompt(s.prompt)
+      setMaxWords(s.maxWords)
+
+      // Bonus: cek apakah sesi masih aktif di Firebase
+      getRoom(s.liveCode).then(data => {
+        if (!data || !data.active || data.phase === 'closed') {
+          localStorage.removeItem('aqt_session')
+          reset()
+        }
+      }).catch(() => {
+        localStorage.removeItem('aqt_session')
+        reset()
+      })
+    } catch {}
+  }, [])
+
   const addWords = () => {
     const parsed = input.trim().split(/[,\s]+/).filter(w => w.length > 1).slice(0, maxWords)
     if (!parsed.length) return
@@ -316,6 +341,8 @@ function WordCloud() {
   }
 
   const reset = () => {
+    // PATCH: hapus session dari localStorage
+    localStorage.removeItem('aqt_session')
     setPhase('setup'); setWords([]); setPrompt(''); setInput('')
     setLiveCode(null); setLiveClosed(false); setPresentMode(false)
   }
@@ -330,6 +357,15 @@ function WordCloud() {
       setLiveClosed(false)
       setPhase('collecting')
       setPresentMode(true)
+
+      // PATCH: simpan session ke localStorage
+      localStorage.setItem('aqt_session', JSON.stringify({
+        tool: 'wordcloud',
+        liveCode: code,
+        phase: 'collecting',
+        prompt,
+        maxWords,
+      }))
     } catch (e) {
       alert('Gagal membuat sesi live. Cek konfigurasi Firebase.\n\n' + e.message)
     }
@@ -337,6 +373,8 @@ function WordCloud() {
   }
 
   const endLive = async () => {
+    // PATCH: hapus session dari localStorage
+    localStorage.removeItem('aqt_session')
     if (liveCode) await closeRoom(liveCode)
     setLiveClosed(true)
   }
