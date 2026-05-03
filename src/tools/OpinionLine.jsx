@@ -7,6 +7,7 @@ import {
   useListenRoom, countOpinions,
   getRoom, submitOpinion,
   hasSubmitted, markSubmitted,
+  withTimeout,   // ← tambah helper
 } from '../hooks/useRoom'
 
 function OpinionLine() {
@@ -48,18 +49,24 @@ function OpinionLine() {
 
   const goLive = async () => {
     if (!statement.trim()) return
+    if (liveCode) return                    // ← guard cegah double-click
     setLiveLoading(true)
     const code = generateRoomCode()
     try {
-      await createRoom(code, { tool: 'opinion', statement })
+      await withTimeout(createRoom(code, { tool: 'opinion', statement }))
       setVotes({ setuju: 0, netral: 0, tidak: 0 })
       setLiveCode(code)
       setLiveClosed(false)
       setPhase('voting')
+      localStorage.setItem('aqt_session', JSON.stringify({
+        tool: 'opinion', liveCode: code,
+        phase: 'voting', statement,
+      }))
     } catch (e) {
       alert('Gagal membuat sesi live. Cek konfigurasi Firebase.\n\n' + e.message)
+    } finally {
+      setLiveLoading(false)                 // ← selalu terpanggil
     }
-    setLiveLoading(false)
   }
 
   const endLive = async () => {
