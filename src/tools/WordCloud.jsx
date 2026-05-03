@@ -37,6 +37,9 @@ const StudentWrap = ({ code, children }) => (
       </div>
     </div>
     <div style={{ width: '100%', maxWidth: 460 }}>{children}</div>
+    <div style={{ marginTop: 28, fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+  ☕ Developed by: Andy Rasyadi
+</div>
   </div>
 )
 
