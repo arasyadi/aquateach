@@ -7,7 +7,7 @@ import {
   useListenRoom, countOpinions,
   getRoom, submitOpinion,
   hasSubmitted, markSubmitted,
-  withTimeout,   // ← tambah helper
+  withTimeout,
 } from '../hooks/useRoom'
 
 function OpinionLine() {
@@ -49,7 +49,7 @@ function OpinionLine() {
 
   const goLive = async () => {
     if (!statement.trim()) return
-    if (liveCode) return                    // ← guard cegah double-click
+    if (liveCode) return
     setLiveLoading(true)
     const code = generateRoomCode()
     try {
@@ -65,7 +65,7 @@ function OpinionLine() {
     } catch (e) {
       alert('Gagal membuat sesi live. Cek konfigurasi Firebase.\n\n' + e.message)
     } finally {
-      setLiveLoading(false)                 // ← selalu terpanggil
+      setLiveLoading(false)
     }
   }
 
@@ -280,6 +280,14 @@ function OpinionLine() {
                   <div style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 5, wordBreak: 'break-all', lineHeight: 1.4 }}>
                     {joinUrl(liveCode)}
                   </div>
+                  {/* Tombol Salin Link */}
+                  <button
+                    className="btn btn-outline btn-sm"
+                    style={{ marginTop: 9, width: '100%', fontSize: 12 }}
+                    onClick={copyLink}
+                  >
+                    {copied ? '✓ Tersalin!' : '📋 Salin Link'}
+                  </button>
                 </div>
 
                 <div style={{ borderTop: '1px solid rgba(0,200,224,0.1)' }} />
@@ -469,11 +477,11 @@ function OpinionLine() {
   )
 }
 
-/* ── StudentView (ditambahkan dari patch) ──────────── */
+/* ── StudentView ──────────── */
 export function StudentView({ code }) {
   const [status, setStatus]   = useState('loading')
   const [session, setSession] = useState(null)
-  const [picked, setPicked]   = useState(null)  // 'setuju' | 'netral' | 'tidak'
+  const [picked, setPicked]   = useState(null)
   const [errMsg, setErrMsg]   = useState('')
 
   useEffect(() => {
@@ -596,7 +604,6 @@ export function StudentView({ code }) {
 
   return (
     <Wrap>
-      {/* Statement */}
       <div style={{
         background: 'linear-gradient(135deg,rgba(0,200,224,0.12),rgba(0,200,224,0.03))',
         border: '1px solid rgba(0,200,224,0.3)',
@@ -610,7 +617,6 @@ export function StudentView({ code }) {
         </div>
       </div>
 
-      {/* Opinion buttons */}
       <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '20px 22px' }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14 }}>
           Pilih posisi Anda
