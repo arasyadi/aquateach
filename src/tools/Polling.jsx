@@ -5,6 +5,7 @@ import {
   useListenRoom, countVotes,
   submitVote,
   hasSubmitted, markSubmitted,
+  getRoom, // ← tambahan untuk cek sesi saat restore
 } from '../hooks/useRoom'
 import { QRCodeSVG } from 'qrcode.react'
 import QRModal, { QRClickable } from '../components/QRModal'
@@ -24,6 +25,37 @@ function Polling() {
   const [copied, setCopied]           = useState(false)
   const [liveClosed, setLiveClosed]   = useState(false)
   const [qrOpen, setQrOpen]           = useState(false)
+
+  // ── PATCH: restore sesi dari localStorage saat mount ──────────────
+  useEffect(() => {
+    const saved = localStorage.getItem('aqt_session')
+    if (!saved) return
+    try {
+      const s = JSON.parse(saved)
+      if (s.tool !== 'polling') return
+      setLiveCode(s.liveCode)
+      setPhase(s.phase)
+      setQuestion(s.question)
+      setOptions(Object.values(s.options))
+      setVotes(new Array(Object.values(s.options).length).fill(0))
+      // ── Bonus: cek apakah sesi masih aktif di Firebase ──────
+      getRoom(s.liveCode).then(data => {
+        if (!data || !data.active || data.phase === 'closed') {
+          localStorage.removeItem('aqt_session')
+          // reset state ke setup (opsional, tapi disarankan)
+          setPhase('setup')
+          setQuestion('')
+          setOptions(['', ''])
+          setVotes([])
+          setLiveCode(null)
+          setLiveClosed(false)
+          setPresentMode(false)
+        }
+      }).catch(() => {
+        localStorage.removeItem('aqt_session')
+      })
+    } catch {}
+  }, [])
 
   const { data: roomData } = useListenRoom(liveCode)
 
@@ -56,6 +88,8 @@ function Polling() {
   const reset = () => {
     setPhase('setup'); setQuestion(''); setOptions(['', '']); setVotes([])
     setLiveCode(null); setLiveClosed(false)
+    // ── PATCH: hapus sesi dari localStorage ────────────────────────
+    localStorage.removeItem('aqt_session')
   }
 
   const goLive = async () => {
@@ -71,6 +105,14 @@ function Polling() {
       setLiveClosed(false)
       setPhase('voting')
       setPresentMode(true)
+      // ── PATCH: simpan sesi ke localStorage ──────────────────────
+      localStorage.setItem('aqt_session', JSON.stringify({
+        tool: 'polling',
+        liveCode: code,
+        phase: 'voting',
+        question,
+        options: optObject,
+      }))
     } catch (e) {
       alert('Gagal membuat sesi live. Pastikan Firebase sudah dikonfigurasi.\n\n' + e.message)
     }
@@ -80,6 +122,8 @@ function Polling() {
   const endLive = async () => {
     if (liveCode) await closeRoom(liveCode)
     setLiveClosed(true)
+    // ── PATCH: hapus sesi dari localStorage ────────────────────────
+    localStorage.removeItem('aqt_session')
   }
 
   const copyLink = () => {
