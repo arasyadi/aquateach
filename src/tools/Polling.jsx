@@ -5,7 +5,8 @@ import {
   useListenRoom, countVotes,
   submitVote,
   hasSubmitted, markSubmitted,
-  getRoom, // ← tambahan untuk cek sesi saat restore
+  getRoom,
+  withTimeout,   // ← tambahan
 } from '../hooks/useRoom'
 import { QRCodeSVG } from 'qrcode.react'
 import QRModal, { QRClickable } from '../components/QRModal'
@@ -42,7 +43,6 @@ function Polling() {
       getRoom(s.liveCode).then(data => {
         if (!data || !data.active || data.phase === 'closed') {
           localStorage.removeItem('aqt_session')
-          // reset state ke setup (opsional, tapi disarankan)
           setPhase('setup')
           setQuestion('')
           setOptions(['', ''])
@@ -88,24 +88,23 @@ function Polling() {
   const reset = () => {
     setPhase('setup'); setQuestion(''); setOptions(['', '']); setVotes([])
     setLiveCode(null); setLiveClosed(false)
-    // ── PATCH: hapus sesi dari localStorage ────────────────────────
     localStorage.removeItem('aqt_session')
   }
 
   const goLive = async () => {
     if (!question.trim() || validOptions.length < 2) return
+    if (liveCode) return                    // ← guard: sudah live, jangan buat baru
     setLiveLoading(true)
     const code = generateRoomCode()
     const optObject = {}
     validOptions.forEach((o, i) => { optObject[i] = o })
     try {
-      await createRoom(code, { tool: 'polling', question, options: optObject })
+      await withTimeout(createRoom(code, { tool: 'polling', question, options: optObject }))
       setVotes(new Array(options.length).fill(0))
       setLiveCode(code)
       setLiveClosed(false)
       setPhase('voting')
       setPresentMode(true)
-      // ── PATCH: simpan sesi ke localStorage ──────────────────────
       localStorage.setItem('aqt_session', JSON.stringify({
         tool: 'polling',
         liveCode: code,
@@ -115,14 +114,14 @@ function Polling() {
       }))
     } catch (e) {
       alert('Gagal membuat sesi live. Pastikan Firebase sudah dikonfigurasi.\n\n' + e.message)
+    } finally {
+      setLiveLoading(false)                 // ← selalu terpanggil, berhasil atau gagal
     }
-    setLiveLoading(false)
   }
 
   const endLive = async () => {
     if (liveCode) await closeRoom(liveCode)
     setLiveClosed(true)
-    // ── PATCH: hapus sesi dari localStorage ────────────────────────
     localStorage.removeItem('aqt_session')
   }
 
