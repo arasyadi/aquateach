@@ -13,6 +13,7 @@ import {
   useListenRoom,
   getRoom, submitResponse,
   flattenResponses,
+  withTimeout,   // ← tambah ini
 } from '../hooks/useRoom'
 import QRModal, { QRClickable } from '../components/QRModal'
 
@@ -335,24 +336,31 @@ function LiveOpenResponse() {
 
   const goLive = async () => {
     if (!question.trim() || !reveal.trim()) return
+    if (liveCode) return                    // ← guard
     setLiveLoading(true)
     const code = generateRoomCode()
     try {
-      await createRoom(code, {
+      await withTimeout(createRoom(code, {
         tool: 'liveresp',
         question: question.trim(),
         reveal: reveal.trim(),
         comparePrompt: comparePrompt.trim(),
         status: 'live',
-      })
+      }))
       setLiveCode(code)
       setLiveClosed(false)
       setPhase('live')
       setPresentMode(true)
+      localStorage.setItem('aqt_session', JSON.stringify({
+        tool: 'liveresp', liveCode: code,
+        phase: 'live', question, reveal,
+        comparePrompt: comparePrompt.trim(),
+      }))
     } catch (e) {
       alert('Gagal membuat sesi live. Cek konfigurasi Firebase.\n\n' + e.message)
+    } finally {
+      setLiveLoading(false)                 // ← selalu terpanggil
     }
-    setLiveLoading(false)
   }
 
   const doReveal = async () => {
